@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.env
+.DS_Store
+
+# 忽略下载的资源
+VideoDownload/
+*.mp4
+
+# Logs and temporary files
+*.log
+
+# 编辑器配置文件
+.vscode/
+.idea/
