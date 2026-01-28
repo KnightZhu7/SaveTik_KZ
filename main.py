@@ -8,7 +8,7 @@ class SaveTikApp(ctk.CTk):
         super().__init__()
 
         # 窗口基础设置
-        self.title("SaveTik - Douyin Downloader")
+        self.title("SaveTik_KZ - Douyin Video Downloader")
         self.geometry("700x550")
         self.configure(fg_color="#191919") # Notion 暗黑背景色
         
@@ -25,7 +25,7 @@ class SaveTikApp(ctk.CTk):
         # 标题
         self.header_label = ctk.CTkLabel(
             self, 
-            text="📥 SaveTik_KZ", 
+            text="SaveTik_KZ", 
             font=("Inter", 28, "bold"), 
             text_color="#FFFFFF"
         )

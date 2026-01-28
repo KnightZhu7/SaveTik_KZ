@@ -18,8 +18,15 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
    pip install -r requirements.txt
    ```
 
+**Set DerisionPage**:
+   Edit the Chrome executable path in `set_drissionpage.py`
+   ```bash
+   python set_drissionpage.py
+   ```
+
 **Run**:
    ```bash
    python main.py
    ```
 
+   *You will see:*
