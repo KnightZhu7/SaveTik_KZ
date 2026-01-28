@@ -1,5 +1,9 @@
 This is a simple and efficient Douyin web video downloader built on `DrissionPage`.
 
+## Interface Preview
+
+![SaveTik_KZ UI](Screenshot%20SaveTik_KZ.png)
+
 ## Features
 
 - Download videos from the Douyin web platform with support for multiple quality options.  
@@ -29,4 +33,3 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
    python main.py
    ```
 
-   *You will see:*
