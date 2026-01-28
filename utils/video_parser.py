@@ -78,6 +78,8 @@ def parse_video_data(input_text):
             results[file_hash] = {
                 'FPS': item.get('FPS', ''),
                 'bit_rate': item.get('bit_rate', ''),
+                'HDR_bit': item.get('HDR_bit', ''),
+                'HDR_type': item.get('HDR_type', ''),
                 'data_size': play_addr.get('data_size', ''),
                 'file_hash': file_hash,
                 'height': play_addr.get('height', ''),

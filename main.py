@@ -110,7 +110,8 @@ class SaveTikApp(ctk.CTk):
 
         self.video_data = data
         self.metadata = meta
-        self.status_bar.configure(text=f"👤 {meta['nickname']}  |  📅 {meta['create_time']}")
+        # self.status_bar.configure(text=f"👤 {meta['nickname']}  |  📅 {meta['create_time']}")
+        self.status_bar.configure(text=f"解析完成: {len(data)} 个视频流")
 
         for info in data:
             item = ctk.CTkFrame(
@@ -122,7 +123,9 @@ class SaveTikApp(ctk.CTk):
             )
             item.pack(fill="x", pady=6)
             
-            desc = f"🎬 {info['width']}x{info['height']}  |  {info['encoding']}  |  {info['bit_rate']} bps"
+            is_hdr = info.get('HDR_bit') == "10" and info.get('HDR_type') == "1"
+            hdr_tag = "  |  HDR" if is_hdr else ""
+            desc = f"🎬 {info['width']}x{info['height']}  |  {info['encoding']}  |  {info['bit_rate']} bps{hdr_tag}"
             ctk.CTkLabel(item, text=desc, font=("Inter", 13), text_color=self.text_main).pack(side="left", padx=20, pady=12)
             
             dl_btn = ctk.CTkButton(
@@ -138,8 +141,18 @@ class SaveTikApp(ctk.CTk):
             dl_btn.pack(side="right", padx=20)
 
     def on_download(self, info):
-        self.status_bar.configure(text=f"正在下载 {info['height']}p 视频...")
-        threading.Thread(target=download_video_stream, args=(info, self.metadata), daemon=True).start()
+        is_hdr = info.get('HDR_bit') == "10" and info.get('HDR_type') == "1"
+        hdr_tag = " HDR" if is_hdr else ""
+        self.status_bar.configure(text=f"正在下载 {info['height']}p{hdr_tag} 视频...")
+
+        def do_download():
+            success = download_video_stream(info, self.metadata)
+            if success:
+                self.after(0, lambda: self.status_bar.configure(text=f"✅ 下载完成: {info['height']}p{hdr_tag}"))
+            else:
+                self.after(0, lambda: self.status_bar.configure(text=f"❌ 下载失败: {info['height']}p{hdr_tag}"))
+
+        threading.Thread(target=do_download, daemon=True).start()
 
 if __name__ == "__main__":
     app = SaveTikApp()

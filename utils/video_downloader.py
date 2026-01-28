@@ -24,8 +24,12 @@ def download_video_stream(stream_info, metadata):
     # 准确对应 url_list[0]
     video_url = url_list[0]
 
-    # 构造文件名: {nickname}_{create_time}_{分辨率}p_{编码格式}_{码率信息}.mp4
-    filename = f"{nickname}_{create_time}_{height}*{width}p_{encoding}_{bit_rate}.mp4"
+    # HDR 标识判断
+    is_hdr = stream_info.get('HDR_bit') == "10" and stream_info.get('HDR_type') == "1"
+    hdr_tag = "_HDR" if is_hdr else ""
+
+    # 构造文件名: {nickname}_{create_time}_{分辨率}p_{编码格式}_{码率信息}{HDR}.mp4
+    filename = f"{nickname}_{create_time}_{height}*{width}p_{encoding}_{bit_rate}{hdr_tag}.mp4"
     
     headers = {
         'referer': 'https://www.douyin.com/', 
@@ -44,5 +48,7 @@ def download_video_stream(stream_info, metadata):
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         print(f"[+] 下载成功！文件保存为: {save_path}")
+        return True
     except Exception as e:
         print(f"[-] 下载失败: {e}")
+        return False

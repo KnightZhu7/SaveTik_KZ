@@ -88,6 +88,8 @@ tab.get('https://www.youtube.com/')
         >>>`bit_rate` ：视频质量最全的 `video_info_list`
         >>>>`0`
         >>>>>`FPS`
+        >>>>>`HDR_bit` ：HDR 视频为 10
+        >>>>>`HDR_type` ：HDR 视频为 1
         >>>>>`bit_rate`
         >>>>>`format`
         >>>>>`play_addr`

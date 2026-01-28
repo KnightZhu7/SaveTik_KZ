@@ -23,6 +23,11 @@ def main():
         print(f"序号: {i}")
         print(f"编码格式: {info['encoding']}")
         print(f"分辨率: {info['width']}x{info['height']}")
+        # print(f"HDR: {info['HDR_bit']}")
+        # print(f"HDR_type: {info['HDR_type']}")
+        is_hdr = info.get('HDR_bit') == "10" and info.get('HDR_type') == "1"
+        if is_hdr:
+            print(f"HDR: 是 (10-bit)")
         print(f"FPS: {info['FPS']}")
         print(f"比特率: {info['bit_rate']}")
         print(f"文件大小: {info['data_size']} bytes")
