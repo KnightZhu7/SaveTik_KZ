@@ -10,6 +10,8 @@ ENV/
 # 忽略下载的资源
 VideoDownload/
 *.mp4
+ImageDownload/
+*.jpeg
 
 # Logs and temporary files
 *.log
@@ -17,3 +19,6 @@ VideoDownload/
 # 编辑器配置文件
 .vscode/
 .idea/
+
+# 忽略特定的脚本文件
+savetik_toy_sample.py
