@@ -1,17 +1,18 @@
 from DrissionPage import ChromiumPage, ChromiumOptions, Chromium
 from utils.link_parser import extract_douyin_url
+import datetime as dt
 
 def parse_video_data(input_text):
     """
     输入抖音链接或包含链接的文本，解析视频数据，提取指定字段并识别编码格式。
     
     :param input_text: 包含抖音链接的字符串
-    :return: 解析后的视频信息列表
+    :return: (解析后的视频信息列表, 视频元数据字典)
     """
     # 1. 提取有效链接
     video_link = extract_douyin_url(input_text)
     if not video_link:
-        return []
+        return [], {}
 
     # 2. 使用 DrissionPage 获取数据
     browser = Chromium()
@@ -24,10 +25,23 @@ def parse_video_data(input_text):
         dp.get(video_link)
         res = dp.listen.wait()
         if not res:
-            return []
+            return [], {}
         aweme_detail = res.response.body.get('aweme_detail', {})
     finally:
         tab.close()
+
+    if not aweme_detail:
+        return [], {}
+
+    # 提取元数据用于命名
+    nickname = aweme_detail.get('author', {}).get('nickname', 'unknown')
+    create_time_ts = aweme_detail.get('create_time', 0)
+    create_time = dt.datetime.fromtimestamp(create_time_ts).strftime('%Y-%m-%d_%H-%M-%S')
+    
+    metadata = {
+        'nickname': nickname,
+        'create_time': create_time
+    }
 
     video = aweme_detail.get('video', {})
     bit_rate_list = video.get('bit_rate', [])
@@ -72,4 +86,4 @@ def parse_video_data(input_text):
                 'encoding': encoding
             }
             
-    return list(results.values())
+    return list(results.values()), metadata

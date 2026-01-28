@@ -7,13 +7,16 @@ def main():
         return
 
     print("[+] 正在解析视频数据，请稍候...")
-    video_info_list = parse_video_data(user_input)
+    video_info_list, metadata = parse_video_data(user_input)
 
     if not video_info_list:
         print("[-] 未能解析到视频信息，请检查链接是否有效。")
         return
 
     print(f"\n[+] 共找到 {len(video_info_list)} 个视频流信息：")
+    print(f"\n[+] 视频作者: {metadata.get('nickname')}")
+    print(f"[+] 发布时间: {metadata.get('create_time')}")
+    print(f"[+] 共找到 {len(video_info_list)} 个视频流信息：")
     print("-" * 50)
 
     for i, info in enumerate(video_info_list, 1):
