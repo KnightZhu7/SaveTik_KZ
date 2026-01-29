@@ -15,20 +15,18 @@ def parse_video_data(input_text):
         return [], {}
 
     # 2. 使用 DrissionPage 获取数据
-    browser = Chromium()
-    tab = browser.latest_tab
-    co = ChromiumOptions()
-    co.headless(True)
-    dp = ChromiumPage()
+    co = ChromiumOptions().headless(True)
+    dp = ChromiumPage(addr_or_opts=co)
     try:
         dp.listen.start('web/aweme/detail/')
         dp.get(video_link)
         res = dp.listen.wait()
+        ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
         if not res:
             return [], {}
         aweme_detail = res.response.body.get('aweme_detail', {})
     finally:
-        tab.close()
+        dp.quit()
 
     if not aweme_detail:
         return [], {}
@@ -40,7 +38,8 @@ def parse_video_data(input_text):
     
     metadata = {
         'nickname': nickname,
-        'create_time': create_time
+        'create_time': create_time,
+        'user_agent': ua
     }
 
     video = aweme_detail.get('video', {})

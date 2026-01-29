@@ -33,7 +33,7 @@ def download_video_stream(stream_info, metadata):
     
     headers = {
         'referer': 'https://www.douyin.com/', 
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', 
+        'user-agent': metadata.get('user_agent'), 
     }
 
     save_dir = "VideoDownload"
