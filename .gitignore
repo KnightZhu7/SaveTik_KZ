@@ -12,6 +12,7 @@ VideoDownload/
 *.mp4
 ImageDownload/
 *.jpeg
+dist/
 
 # Logs and temporary files
 *.log
@@ -20,5 +21,3 @@ ImageDownload/
 .vscode/
 .idea/
 
-# 忽略特定的脚本文件
-savetik_toy_sample.py

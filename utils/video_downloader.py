@@ -36,7 +36,9 @@ def download_video_stream(stream_info, metadata):
         'user-agent': metadata.get('user_agent'), 
     }
 
-    save_dir = "VideoDownload"
+    # 改进：使用用户主目录下的 Downloads 文件夹，确保在打包后仍有写入权限且路径明确
+    home_dir = os.path.expanduser("~")
+    save_dir = os.path.join(home_dir, "Downloads", "SaveTik_KZ")
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, filename)
 
