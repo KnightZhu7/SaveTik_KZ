@@ -2,6 +2,7 @@ import customtkinter as ctk
 from utils.video_parser import parse_video_data
 from utils.video_downloader import download_video_stream
 import threading
+from utils.browser_helper import init_browser_config
 
 class SaveTikApp(ctk.CTk):
     def __init__(self):
@@ -155,5 +156,6 @@ class SaveTikApp(ctk.CTk):
         threading.Thread(target=do_download, daemon=True).start()
 
 if __name__ == "__main__":
+    init_browser_config()
     app = SaveTikApp()
     app.mainloop()
