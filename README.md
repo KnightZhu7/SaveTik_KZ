@@ -35,7 +35,7 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
    python main.py
    ```
 
-**Package the application**
+**Package the application**:
    ```bash
    python package_app.py
    ```
