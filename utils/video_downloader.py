@@ -1,4 +1,5 @@
 import requests as req
+import re
 import os
 
 def download_video_stream(stream_info, metadata):
@@ -29,7 +30,10 @@ def download_video_stream(stream_info, metadata):
     hdr_tag = "_HDR" if is_hdr else ""
 
     # 构造文件名: {nickname}_{create_time}_{分辨率}p_{编码格式}_{码率信息}{HDR}.mp4
-    filename = f"{nickname}_{create_time}_{height}*{width}p_{encoding}_{bit_rate}{hdr_tag}.mp4"
+    raw_filename = f"{nickname}_{create_time}_{height}x{width}p_{encoding}_{bit_rate}{hdr_tag}.mp4"
+
+    safe_filename = re.sub(r'[<>:"/\\|?*]', '_', raw_filename)
+    filename = safe_filename.strip()
     
     headers = {
         'referer': 'https://www.douyin.com/', 
