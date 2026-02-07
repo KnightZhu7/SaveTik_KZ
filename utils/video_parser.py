@@ -75,7 +75,7 @@ def parse_video_data(input_text):
         else:
             # 提取所需字段，没有的信息默认为空字符串或空列表
             results[file_hash] = {
-                'FPS': item.get('FPS', ''),
+                'fps': item.get('FPS', ''),
                 'bit_rate': item.get('bit_rate', ''),
                 'HDR_bit': item.get('HDR_bit', ''),
                 'HDR_type': item.get('HDR_type', ''),
@@ -84,7 +84,9 @@ def parse_video_data(input_text):
                 'height': play_addr.get('height', ''),
                 'width': play_addr.get('width', ''),
                 'url_list': play_addr.get('url_list', []),
-                'encoding': encoding
+                'encoding': encoding,
+                'nickname': nickname,
+                'create_time': create_time
             }
             
     return list(results.values()), metadata

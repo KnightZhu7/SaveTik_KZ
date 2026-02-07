@@ -14,6 +14,7 @@ def download_video_stream(stream_info, metadata):
     # 提取流信息
     height = stream_info.get('height', '0')
     width = stream_info.get('width', '0')
+    fps = stream_info.get('fps', '0')
     encoding = stream_info.get('encoding', 'H264')
     bit_rate = stream_info.get('bit_rate', '0')
     url_list = stream_info.get('url_list', [])
@@ -29,8 +30,8 @@ def download_video_stream(stream_info, metadata):
     is_hdr = stream_info.get('HDR_bit') == "10" and stream_info.get('HDR_type') == "1"
     hdr_tag = "_HDR" if is_hdr else ""
 
-    # 构造文件名: {nickname}_{create_time}_{分辨率}p_{编码格式}_{码率信息}{HDR}.mp4
-    raw_filename = f"{nickname}_{create_time}_{height}x{width}p_{encoding}_{bit_rate}{hdr_tag}.mp4"
+    # 构造文件名: {nickname}_{create_time}_{分辨率}p_{fps}fps_{编码格式}_{码率信息}{HDR}.mp4
+    raw_filename = f"{nickname}_{create_time}_{height}x{width}p_{fps}fps_{encoding}_{bit_rate}{hdr_tag}.mp4"
 
     safe_filename = re.sub(r'[<>:"/\\|?*]', '_', raw_filename)
     filename = safe_filename.strip()

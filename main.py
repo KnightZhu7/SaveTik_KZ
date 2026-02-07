@@ -235,7 +235,7 @@ class SaveTikApp(ctk.CTk):
 
             is_hdr = info.get('HDR_bit') == "10" and info.get('HDR_type') == "1"
             hdr_tag = "  |  HDR" if is_hdr else ""
-            desc = f"🎬 {info['width']}x{info['height']}  |  {info['encoding']}  |  {info['bit_rate']} bps{hdr_tag}"
+            desc = f"🎬 {info['width']}x{info['height']}  |  {info['fps']} FPS  |  {info['encoding']}  |  {info['bit_rate']} bps{hdr_tag}"
             
             # 将点击和悬停事件也绑定到文字标签上
             lbl = ctk.CTkLabel(item, text=desc, font=("Inter", 13), text_color=self.text_main)
