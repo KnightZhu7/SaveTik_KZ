@@ -24,6 +24,9 @@ def build():
         f'--name={app_name}',    # 生成的应用名称
         '--clean',              # 打包前清理临时文件
         'main.py'               # 入口文件
+        # 如果有额外的资源文件，按如下格式添加：
+        # f'--add-data=config.json{sep}.', 
+        # f'--add-data=assets{sep}assets',
     ]
 
     # Windows 建议使用 --onefile 方便分发
