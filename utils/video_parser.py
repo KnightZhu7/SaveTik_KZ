@@ -12,7 +12,7 @@ def parse_video_data(input_text):
     # 1. 提取有效链接
     video_link = extract_douyin_url(input_text)
     if not video_link:
-        return [], {}
+        raise Exception("未检测到有效的抖音链接，请检查输入内容")
 
     # 2. 使用 DrissionPage 获取数据
     co = ChromiumOptions().headless(True)
@@ -20,16 +20,16 @@ def parse_video_data(input_text):
     try:
         dp.listen.start('web/aweme/detail/')
         dp.get(video_link)
-        res = dp.listen.wait()
+        res = dp.listen.wait(timeout=15)
         ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
         if not res:
-            return [], {}
-        aweme_detail = res.response.body.get('aweme_detail', {})
+            raise Exception("该链接不是有效的视频链接，请检查后重试")
+        aweme_detail = res.response.body.get('aweme_detail')
     finally:
         dp.quit()
 
     if not aweme_detail:
-        return [], {}
+        raise Exception("解析失败：未能获取到视频详情数据")
 
     # 提取元数据用于命名
     nickname = aweme_detail.get('author', {}).get('nickname', 'unknown')

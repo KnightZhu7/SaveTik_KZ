@@ -160,7 +160,7 @@ class SaveTikApp(ctk.CTk):
                 data, meta = parse_video_data(url)
                 self.after(0, lambda: self.render_list(data, meta))
             except Exception as e:
-                self.after(0, lambda: self.status_bar.configure(text=f"解析出错: {e}", text_color="#888888"))
+                self.after(0, lambda: self.status_bar.configure(text=f"{e}", text_color="#FF5555"))
                 self.after(0, lambda: self.on_url_change())
                 self.after(0, lambda: self.fetch_btn.configure(state="normal"))
 
@@ -169,10 +169,6 @@ class SaveTikApp(ctk.CTk):
     def render_list(self, data, meta):
         self.fetch_btn.configure(state="normal")
         self.on_url_change()
-
-        if not data:
-            self.status_bar.configure(text="未解析到有效视频流", text_color="#888888")
-            return
 
         self.video_data = data
         self.metadata = meta
@@ -224,12 +220,12 @@ class SaveTikApp(ctk.CTk):
                 v.set(not v.get())
             
             # 绑定悬停和点击事件
-            item.bind("<Enter>", lambda e, h=on_hover: h(True))
-            item.bind("<Leave>", lambda e, h=on_hover: h(False))
-            item.bind("<Button-1>", toggle_selection)
-            item.bind("<MouseWheel>", self.on_list_scroll)
-            item.bind("<Button-4>", self.on_list_scroll)
-            item.bind("<Button-5>", self.on_list_scroll)
+            item.bind("<Enter>", lambda e, h=on_hover: h(True))   # 鼠标移入：显示悬停色
+            item.bind("<Leave>", lambda e, h=on_hover: h(False))  # 鼠标移出：恢复背景色
+            item.bind("<Button-1>", toggle_selection)             # 左键点击：切换选中状态
+            item.bind("<MouseWheel>", self.on_list_scroll)        # 滚轮滚动：防止悬停色残留 (Windows/macOS)
+            item.bind("<Button-4>", self.on_list_scroll)          # 滚轮向上：同上 (Linux)
+            item.bind("<Button-5>", self.on_list_scroll)          # 滚轮向下：同上 (Linux)
             
             self.checkbox_vars.append((var, info, item))
 

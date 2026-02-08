@@ -22,5 +22,6 @@ dist/
 .idea/
 
 savetik_toy_sample.py
-api_server.py
+# api_server.py
+api_server_test.py
 py2swiftUI.md
