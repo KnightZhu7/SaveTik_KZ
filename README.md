@@ -5,7 +5,7 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
    - macOS: Native **SwiftUI** interface for a modern and smooth user experience
    - Windows: Python-based GUI built with `customtkinter`
    - Consistent core logic and downloading behavior across platforms
-<br>
+
 - Download videos from the Douyin web platform with comprehensive quality selection support:
   - **Resolution** (e.g. 720p / 1080p / 4K)
   - **Bitrate** (Choose the required bitrate)
