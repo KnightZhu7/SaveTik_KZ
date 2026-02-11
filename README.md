@@ -22,7 +22,7 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
 ## Requirements
 
 - Python 3.6+
-- A web browser (Chromium-based browsers are supported by default in DrissionPage)
+- Chrome
 - Xcode
 
 ## Quick Start
