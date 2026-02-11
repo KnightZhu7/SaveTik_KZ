@@ -5,26 +5,6 @@
 //  Created by Knight Zhu on 2/3/26.
 //
 
-//import SwiftUI
-//
-//struct ContentView: View {
-//    var body: some View {
-//        VStack {
-//            Image(systemName: "tray.and.arrow.down.fill")
-//                .imageScale(.large)
-//                .foregroundStyle(.primary)
-//            Text("SaveTik_KZ")
-//                .font(.title)
-//                .fontWeight(.semibold)
-//        }
-//        .padding()
-//    }
-//}
-//
-//#Preview {
-//    ContentView()
-//}
-
 import SwiftUI
 
 // MARK: - 0. 样式与主题配置
@@ -837,20 +817,20 @@ struct VideoRow: View {
                 ZStack {
                     if isSelectionMode {
                         if isSelected {
-                            Image(systemName: "checkmark.circle.fill")
+                            Image(systemName: "checkmark.app.fill")
                                 .resizable()
                                 .frame(width: 20, height: 20)
                                 .foregroundColor(AppTheme.accentBlue)
                                 .transition(.scale)
                         } else {
-                            Image(systemName: "circle")
+                            Image(systemName: "app")
                                 .resizable()
                                 .frame(width: 20, height: 20)
                                 .foregroundColor(.secondary.opacity(0.5))
                                 .transition(.opacity)
                         }
                     } else {
-                        Image(systemName: "arrow.down.to.line.circle")
+                        Image(systemName: "arrow.down.circle")
                             .resizable()
                             .frame(width: 20, height: 20)
                             .foregroundColor(isHovering ? AppTheme.accentBlue : .secondary)
