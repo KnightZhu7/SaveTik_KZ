@@ -199,6 +199,13 @@ struct ContentView: View {
     @State private var hasError: Bool = false
     @FocusState private var isInputFocused: Bool
     @State private var textFieldID = UUID()
+    // --- 批量下载追踪 ---
+    @State private var activeTasksCount: Int = 0      // 正在进行的任务数
+//    @State private var batchSuccessCount: Int = 0    // 成功计数
+//    @State private var batchErrorCount: Int = 0      // 失败计数
+    @State private var batchTotal = 0        // 本次选中的总数
+    @State private var batchSuccess = 0      // 已成功的数量
+    @State private var batchError = 0        // 已失败的数量
     
     // --- 计算属性 ---
     var isSelectionMode: Bool {
@@ -477,6 +484,7 @@ struct ContentView: View {
                                     }
                                     .frame(width: 450, height: 300)
                                 }
+                                .animation(.easeInOut(duration: 0.2), value: showLogPopover)
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                                 .padding(.bottom, 10)
@@ -660,40 +668,62 @@ struct ContentView: View {
         }
     
     // 2. 单个下载逻辑
-    func downloadSingle(video: VideoStream) {
+        func downloadSingle(video: VideoStream, isBatchCall: Bool = false) {
             let index = (videoList.firstIndex(where: { $0.id == video.id }) ?? 0) + 1
             
-            // 🔵 底部显示：正在请求下载视频...
-            // 📝 日志记录：正在请求下载第 1 个视频...
-            updateStatus("正在请求下载第 \(index) 个视频...", summary: "正在请求下载视频...", type: .loading)
+            // 🔥 关键修复：如果不是批量调用（即用户点的单个下载），重置状态为“单任务模式”
+            if !isBatchCall {
+                batchTotal = 1
+                batchSuccess = 0
+                batchError = 0
+                activeTasksCount = 0
+            }
+            
+            activeTasksCount += 1 // 增加活跃任务
+            
+            // 单个下载时显示详细，批量时显示概览
+            let loadingMsg = isBatchCall ? "准备下载中..." : "正在请求下载第 \(index) 个视频..."
+            updateStatus("正在请求第 \(index) 个视频...", summary: loadingMsg, type: .loading)
             
             Task {
                 do {
                     let taskId = try await APIService.shared.download(stream: video, metadata: self.currentMetadata)
                     await MainActor.run {
-                        updateStatus("第 \(index) 个任务已提交...", summary: "下载任务已提交...", type: .loading)
                         startPolling(taskId: taskId, videoIndex: index)
                     }
                 } catch {
                     await MainActor.run {
-                        updateStatus("第 \(index) 个视频请求失败: \(error.localizedDescription)", summary: "视频请求失败", type: .error)
+                        activeTasksCount -= 1
+                        batchError += 1
+                        updateStatus("第 \(index) 个视频请求失败: \(error.localizedDescription)", type: .error)
+                        // 立即结算
+                        finalizeBatchIfNeeded()
                     }
                 }
             }
         }
     
     // 3. 批量下载逻辑
-        func downloadSelected() {
+    func downloadSelected() {
             let targets = videoList.filter { selectedVideos.contains($0.id) }
             guard !targets.isEmpty else { return }
             
+            // 🔥 初始化批量状态
+            batchTotal = targets.count
+            batchSuccess = 0
+            batchError = 0
+            activeTasksCount = 0
+            
+            updateStatus("开始批量下载 \(batchTotal) 个视频", summary: "准备批量下载...", type: .loading)
+            
             for video in targets {
-                downloadSingle(video: video)
+                // 标记为批量调用，防止 downloadSingle 内部重置计数器
+                downloadSingle(video: video, isBatchCall: true)
             }
         }
     
     // 4. 轮询逻辑 (使用 Swift 6 安全的 Task.sleep)
-    func startPolling(taskId: String, videoIndex: Int) {
+        func startPolling(taskId: String, videoIndex: Int) {
             Task {
                 var isRunning = true
                 while isRunning {
@@ -702,21 +732,70 @@ struct ContentView: View {
                         let status = try await APIService.shared.checkStatus(taskId: taskId)
                         await MainActor.run {
                             if status == "completed" {
-                                // ✅ 底部：视频下载成功
-                                // 📝 日志：第 x 个视频下载成功
-                                updateStatus("第 \(videoIndex) 个视频下载成功", summary: "视频下载成功", type: .success)
+                                batchSuccess += 1
+                                activeTasksCount -= 1
                                 isRunning = false
+                                
+                                // 🔥 分情况处理中间状态
+                                if batchTotal == 1 {
+                                    // 单个模式：直接显示成功
+                                    updateStatus("第 \(videoIndex) 个视频下载成功", summary: "下载成功", type: .success)
+                                } else {
+                                    // 批量模式：只在日志里记一笔，不改底部 Summary（避免刷屏）
+                                    updateStatus("第 \(videoIndex) 个视频下载成功", summary: nil, type: .success)
+                                }
+                                finalizeBatchIfNeeded()
+                                
                             } else if status == "failed" {
-                                // ❌ 底部：视频下载失败
-                                updateStatus("第 \(videoIndex) 个视频下载失败", summary: "视频下载失败", type: .error)
+                                batchError += 1
+                                activeTasksCount -= 1
                                 isRunning = false
+                                
+                                if batchTotal == 1 {
+                                    // 单个模式：直接显示失败
+                                    updateStatus("第 \(videoIndex) 个视频下载失败", summary: "下载失败", type: .error)
+                                } else {
+                                    // 批量模式：只记日志
+                                    updateStatus("第 \(videoIndex) 个视频下载失败", summary: nil, type: .error)
+                                }
+                                finalizeBatchIfNeeded()
+                                
                             } else {
-                                // 🔵 底部：视频下载中...
-                                updateStatus("第 \(videoIndex) 个视频下载中...", summary: "视频下载中...", type: .loading)
+                                // 🔄 只有批量模式才显示 "2/5" 这种进度，单个模式保持“下载中”
+                                if batchTotal > 1 {
+                                    let finished = batchSuccess + batchError
+                                    self.statusMessage = "正在批量下载 (\(finished)/\(batchTotal))..."
+                                } else {
+                                    self.statusMessage = "正在下载视频..."
+                                }
+                                self.statusIcon = LogType.loading.icon
+                                self.statusColor = LogType.loading.color
                             }
                         }
                     } catch { print("waiting...") }
                 }
+            }
+        }
+        
+        // 🔥 新增：统一检查批次是否完成并汇总结果
+        func finalizeBatchIfNeeded() {
+            // 必须等所有任务跑完
+            guard activeTasksCount == 0 else { return }
+            
+            // 🔥 如果是单个下载，前面已经报过结果了，这里直接返回，不再覆盖
+            if batchTotal == 1 { return }
+            
+            // 🔥 下面是批量下载的总结逻辑
+            if batchError > 0 {
+                // 有失败项：红色警告
+                updateStatus("批量任务结束：\(batchSuccess) 成功, \(batchError) 失败",
+                             summary: "完成：\(batchSuccess) 成功，\(batchError) 失败",
+                             type: .error)
+            } else {
+                // 全部成功：绿色
+                updateStatus("所有视频下载成功",
+                             summary: "全部 \(batchTotal) 个视频下载成功",
+                             type: .success)
             }
         }
     

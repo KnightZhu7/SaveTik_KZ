@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B49B80412F39256500BAAEEF /* api_server in Resources */ = {isa = PBXBuildFile; fileRef = B49B80402F39256500BAAEEF /* api_server */; };
+		B40C58FA2F3E031A00C9C83C /* api_server in Resources */ = {isa = PBXBuildFile; fileRef = B40C58F92F3E031A00C9C83C /* api_server */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B40C58F92F3E031A00C9C83C /* api_server */ = {isa = PBXFileReference; lastKnownFileType = folder; name = api_server; path = SaveTikKZ/api_server; sourceTree = "<group>"; };
 		B49B7ED22F38FFB300BAAEEF /* SaveTikKZ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SaveTikKZ.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B49B80402F39256500BAAEEF /* api_server */ = {isa = PBXFileReference; lastKnownFileType = folder; name = api_server; path = SaveTikKZ/api_server; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -55,7 +55,7 @@
 		B4F1E8882F3234CF00EDC2CB = {
 			isa = PBXGroup;
 			children = (
-				B49B80402F39256500BAAEEF /* api_server */,
+				B40C58F92F3E031A00C9C83C /* api_server */,
 				B49B79792F38FA7D00BAAEEF /* SaveTikKZ */,
 				B49B7ED22F38FFB300BAAEEF /* SaveTikKZ.app */,
 			);
@@ -122,7 +122,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B49B80412F39256500BAAEEF /* api_server in Resources */,
+				B40C58FA2F3E031A00C9C83C /* api_server in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -266,7 +266,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = QACQ9N662F;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -302,7 +302,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = QACQ9N662F;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
