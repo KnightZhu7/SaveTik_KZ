@@ -22,6 +22,8 @@ VideoDownload/
 ImageDownload/
 *.jpeg
 dist/
+# 忽略打包生成的文件夹
+SaveTikKZMac/SaveTikKZ/api_server/
 
 # Logs and temporary files
 *.log
