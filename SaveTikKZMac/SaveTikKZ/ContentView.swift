@@ -705,22 +705,27 @@ struct ContentView: View {
     
     // 3. 批量下载逻辑
     func downloadSelected() {
-            let targets = videoList.filter { selectedVideos.contains($0.id) }
-            guard !targets.isEmpty else { return }
-            
-            // 🔥 初始化批量状态
-            batchTotal = targets.count
-            batchSuccess = 0
-            batchError = 0
-            activeTasksCount = 0
-            
-            updateStatus("开始批量下载 \(batchTotal) 个视频", summary: "准备批量下载...", type: .loading)
-            
-            for video in targets {
-                // 标记为批量调用，防止 downloadSingle 内部重置计数器
-                downloadSingle(video: video, isBatchCall: true)
-            }
+        let targets = videoList.filter { selectedVideos.contains($0.id) }
+        guard !targets.isEmpty else { return }
+        
+        // 🔥 判断：如果只选了1个，按单个下载处理
+        if targets.count == 1 {
+            downloadSingle(video: targets[0], isBatchCall: false)
+            return
         }
+        
+        // 🔥 下面是真正的批量下载（2个及以上）
+        batchTotal = targets.count
+        batchSuccess = 0
+        batchError = 0
+        activeTasksCount = 0
+        
+        updateStatus("开始批量下载 \(batchTotal) 个视频", summary: "准备批量下载...", type: .loading)
+        
+        for video in targets {
+            downloadSingle(video: video, isBatchCall: true)
+        }
+    }
     
     // 4. 轮询逻辑 (使用 Swift 6 安全的 Task.sleep)
         func startPolling(taskId: String, videoIndex: Int) {
