@@ -727,60 +727,67 @@ struct ContentView: View {
         }
     }
     
-    // 4. 轮询逻辑 (使用 Swift 6 安全的 Task.sleep)
-        func startPolling(taskId: String, videoIndex: Int) {
-            Task {
-                var isRunning = true
-                while isRunning {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    do {
-                        let status = try await APIService.shared.checkStatus(taskId: taskId)
-                        await MainActor.run {
-                            if status == "completed" {
-                                batchSuccess += 1
-                                activeTasksCount -= 1
-                                isRunning = false
-                                
-                                // 🔥 分情况处理中间状态
-                                if batchTotal == 1 {
-                                    // 单个模式：直接显示成功
-                                    updateStatus("第 \(videoIndex) 个视频下载成功", summary: "下载成功", type: .success)
-                                } else {
-                                    // 批量模式：只在日志里记一笔，不改底部 Summary（避免刷屏）
-                                    updateStatus("第 \(videoIndex) 个视频下载成功", summary: nil, type: .success)
-                                }
-                                finalizeBatchIfNeeded()
-                                
-                            } else if status == "failed" {
-                                batchError += 1
-                                activeTasksCount -= 1
-                                isRunning = false
-                                
-                                if batchTotal == 1 {
-                                    // 单个模式：直接显示失败
-                                    updateStatus("第 \(videoIndex) 个视频下载失败", summary: "下载失败", type: .error)
-                                } else {
-                                    // 批量模式：只记日志
-                                    updateStatus("第 \(videoIndex) 个视频下载失败", summary: nil, type: .error)
-                                }
-                                finalizeBatchIfNeeded()
-                                
+    // 4. 轮询逻辑
+    func startPolling(taskId: String, videoIndex: Int) {
+        Task {
+            var isRunning = true
+            while isRunning {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                do {
+                    let status = try await APIService.shared.checkStatus(taskId: taskId)
+                    await MainActor.run {
+                        if status == "completed" {
+                            batchSuccess += 1
+                            activeTasksCount -= 1
+                            isRunning = false
+                            
+                            if batchTotal == 1 {
+                                // 单个模式：更新状态栏
+                                updateStatus("第 \(videoIndex) 个视频下载成功", summary: "下载成功", type: .success)
                             } else {
-                                // 🔄 只有批量模式才显示 "2/5" 这种进度，单个模式保持“下载中”
-                                if batchTotal > 1 {
-                                    let finished = batchSuccess + batchError
-                                    self.statusMessage = "正在批量下载 (\(finished)/\(batchTotal))..."
-                                } else {
-                                    self.statusMessage = "正在下载视频..."
+                                // 🔥 批量模式：只写日志，不更新状态栏
+                                let log = LogEntry(message: "第 \(videoIndex) 个视频下载成功", type: .success)
+                                logs.insert(log, at: 0)
+                                if logs.count > 50 {
+                                    logs.removeLast()
                                 }
-                                self.statusIcon = LogType.loading.icon
-                                self.statusColor = LogType.loading.color
                             }
+                            finalizeBatchIfNeeded()
+                            
+                        } else if status == "failed" {
+                            batchError += 1
+                            activeTasksCount -= 1
+                            isRunning = false
+                            
+                            if batchTotal == 1 {
+                                // 单个模式：更新状态栏
+                                updateStatus("第 \(videoIndex) 个视频下载失败", summary: "下载失败", type: .error)
+                            } else {
+                                // 🔥 批量模式：只写日志，不更新状态栏
+                                let log = LogEntry(message: "第 \(videoIndex) 个视频下载失败", type: .error)
+                                logs.insert(log, at: 0)
+                                if logs.count > 50 {
+                                    logs.removeLast()
+                                }
+                            }
+                            finalizeBatchIfNeeded()
+                            
+                        } else {
+                            // 🔄 进行中状态：更新状态栏
+                            if batchTotal > 1 {
+                                let finished = batchSuccess + batchError
+                                self.statusMessage = "正在批量下载 (\(finished)/\(batchTotal))..."
+                            } else {
+                                self.statusMessage = "正在下载视频..."
+                            }
+                            self.statusIcon = LogType.loading.icon
+                            self.statusColor = LogType.loading.color
                         }
-                    } catch { print("waiting...") }
-                }
+                    }
+                } catch { print("waiting...") }
             }
         }
+    }
         
         // 🔥 新增：统一检查批次是否完成并汇总结果
         func finalizeBatchIfNeeded() {
