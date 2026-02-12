@@ -1,3 +1,10 @@
+<p align="center">
+  <img src="Image/macOS_Icon_KZ_Blurred.png" width="120" />
+</p>
+
+<h1 align="center">SaveTik_KZ</h1>
+</p>
+
 This is a simple and efficient Douyin web video downloader built on `DrissionPage`.
 
 ## Features
