@@ -95,15 +95,41 @@ struct LogEntry: Identifiable {
     }
 }
 
+// 🔥 拦截原生获焦行为的自定义输入框
+class NonSelectingTextField: NSTextField {
+    private var hasAutoFocusedOnLaunch = false
+    
+    // 1. 解决刚启动时没焦点：监听窗口挂载事件，挂载成功后立刻抢占焦点
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if !hasAutoFocusedOnLaunch, self.window != nil {
+            hasAutoFocusedOnLaunch = true
+            DispatchQueue.main.async {
+                self.window?.makeFirstResponder(self)
+            }
+        }
+    }
+    
+    // 2. 解决闪烁和全选：直接在当前帧抹除全选状态
+    override func becomeFirstResponder() -> Bool {
+        let success = super.becomeFirstResponder()
+        if success, let editor = self.currentEditor() as? NSTextView {
+            let length = self.stringValue.count
+            editor.selectedRange = NSRange(location: length, length: 0)
+        }
+        return success
+    }
+}
+
 // NSViewRepresentable 包装原生 NSTextField
 struct FixedTextField: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String
     var onSubmit: () -> Void
-    @FocusState.Binding var isFocused: Bool  // 🔥 新增：接收焦点状态
+    @Binding var requestFocus: Bool  // 🔥 弃用 @FocusState，改用普通 Binding 触发器
     
     func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
+        let textField = NonSelectingTextField()
         textField.placeholderString = placeholder
         textField.isBordered = false
         textField.backgroundColor = .clear
@@ -111,26 +137,10 @@ struct FixedTextField: NSViewRepresentable {
         textField.delegate = context.coordinator
         textField.focusRingType = .none
         
-        // 设置为可滚动的单行模式
         if let cell = textField.cell as? NSTextFieldCell {
             cell.usesSingleLineMode = true
             cell.wraps = false
             cell.isScrollable = true
-        }
-        
-        // 🔥 监听获得焦点事件
-        NotificationCenter.default.addObserver(
-            forName: NSControl.textDidBeginEditingNotification,
-            object: textField,
-            queue: .main
-        ) { notification in
-            // 当获得焦点时，将光标移到末尾
-            DispatchQueue.main.async {
-                if let fieldEditor = textField.currentEditor() as? NSTextView {
-                    let length = fieldEditor.string.count
-                    fieldEditor.setSelectedRange(NSRange(location: length, length: 0))
-                }
-            }
         }
         
         return textField
@@ -139,6 +149,16 @@ struct FixedTextField: NSViewRepresentable {
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
+        }
+        
+        // 🔥 单向触发：只要收到 true 请求，就强制聚焦，然后重置
+        if requestFocus {
+            DispatchQueue.main.async {
+                if nsView.window?.firstResponder != nsView.currentEditor() {
+                    nsView.window?.makeFirstResponder(nsView)
+                }
+                self.requestFocus = false // 消费掉请求，以备下次触发
+            }
         }
     }
     
@@ -166,6 +186,7 @@ struct FixedTextField: NSViewRepresentable {
             }
             return false
         }
+        // ⚠️ 注意：Coordinator 里不要写监听焦点失去/获得的代码，切断 AppKit 反向干扰 SwiftUI
     }
 }
 
@@ -190,19 +211,18 @@ struct ContentView: View {
     @State private var statusIcon: String = "info.circle"     // 动态图标
     @State private var statusColor: Color = .secondary        // 动态颜色
     
-    // 
+    //
     @State private var logs: [LogEntry] = [] // 存储所有日志
     @State private var showLogPopover: Bool = false // 控制弹窗显示
     //
     @State private var isBackendOnline: Bool = false
     @State private var startupAttempts: Int = 0
     @State private var hasError: Bool = false
-    @FocusState private var isInputFocused: Bool
+//    @FocusState private var isInputFocused: Bool
+    @State private var requestFocus: Bool = false
     @State private var textFieldID = UUID()
     // --- 批量下载追踪 ---
     @State private var activeTasksCount: Int = 0      // 正在进行的任务数
-//    @State private var batchSuccessCount: Int = 0    // 成功计数
-//    @State private var batchErrorCount: Int = 0      // 失败计数
     @State private var batchTotal = 0        // 本次选中的总数
     @State private var batchSuccess = 0      // 已成功的数量
     @State private var batchError = 0        // 已失败的数量
@@ -247,14 +267,19 @@ struct ContentView: View {
                                             }
                                             .pickerStyle(.inline)
                                         } label: {
-                                            Image(systemName: "ellipsis.circle")
-                                                .font(.system(size: 24))
-                                                .foregroundColor(.secondary.opacity(0.6))
-                                                .contentShape(Rectangle())
+                                            // 🔥 直接对图标“点石成金”
+                                            Image(systemName: "ellipsis.circle.fill")
+                                                .font(.system(size: 18))
+                                                // 1. 开启分层渲染模式
+                                                .symbolRenderingMode(.palette)
+                                                // 2. 第一个参数管“三个点”的颜色，第二个参数直接把“液态玻璃”灌进“圆圈”里！
+                                                .foregroundStyle(Color.primary.opacity(0.6), .regularMaterial)
+                                                // 3. 加一点点立体阴影
+                                                .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
                                         }
-                                        .menuStyle(.borderlessButton)
                                         .menuIndicator(.hidden)
-                                        .frame(width: 24, height: 28)
+                                        // 扒掉系统默认的灰色方块按钮底板，只展示我们漂亮的图标
+                                        .buttonStyle(.plain)
                                         .help("切换外观模式")
                                         
                                         Spacer()
@@ -277,8 +302,9 @@ struct ContentView: View {
                         text: $urlInput,
                         placeholder: " 粘贴抖音视频分享链接... ",
                         onSubmit: handleFetchAction,
-                        isFocused: $isInputFocused  // 🔥 传入焦点状态
+                        requestFocus: $requestFocus
                     )
+                    .id(textFieldID)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 10)
                     .background(AppTheme.cardColor(for: colorScheme))
@@ -437,7 +463,7 @@ struct ContentView: View {
                                 .padding(.vertical, 10)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 30)
-                                .background(Color.clear) 
+                                .background(Color.clear)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     showLogPopover.toggle()
@@ -489,6 +515,38 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                                 .padding(.bottom, 10)
             }
+//            if let firstVideo = videoList.first {
+//                VStack {
+//                    Spacer() // 把内容推到底部
+//                    HStack {
+//                        Spacer() // 把内容推到右侧
+//
+//                        let isVertical = firstVideo.width < firstVideo.height
+//
+//                        // 仅保留横竖屏标签
+//                        Text(isVertical ? "竖屏" : "横屏")
+//                            .font(.system(size: 11, weight: .bold))
+//                            .foregroundColor(isVertical ? AppTheme.accentBlue : .secondary)
+//                            // 稍微增加一点内边距，让单身标签显得更饱满
+//                            .padding(.horizontal, 10)
+//                            .padding(.vertical, 5)
+//                            .background(AppTheme.cardColor(for: colorScheme)) // 防文字穿透底色
+//                            .background((isVertical ? AppTheme.accentBlue : Color.secondary).opacity(0.15)) // 叠加色
+//                            .cornerRadius(6)
+//                            .overlay(
+//                                RoundedRectangle(cornerRadius: 6)
+//                                    .strokeBorder(isVertical ? AppTheme.accentBlue.opacity(0.3) : AppTheme.borderColor(for: colorScheme), lineWidth: 1)
+//                            )
+//                            // 增加极其微弱的阴影，让孤立的标签更有悬浮感
+//                            .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+//                            // 🔥 核心对齐：列表距右边是 60，这里设为 75，刚好往左缩一点，留出距离
+//                            .padding(.trailing, 75)
+//                            .padding(.bottom, 50) // 悬浮在底部状态栏上方
+//                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+//                    }
+//                }
+//                .zIndex(2) // 强制漂浮在列表上方
+//            }
         }
         .frame(minWidth: 700, minHeight: 550)
         .onAppear {
@@ -548,10 +606,7 @@ struct ContentView: View {
             hasError = false
             textFieldID = UUID()  // 🔥 重置 ID，强制重建 TextField
             updateStatus("准备就绪", type: .info)
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                isInputFocused = true
-            }
+            requestFocus = true
         } else {
             // 获取逻辑
             if urlInput.isEmpty {
@@ -853,10 +908,28 @@ struct VideoRow: View {
             .frame(width: 44)
             
             // 2. 分辨率
-            Text("\(video.width)x\(video.height)")
+            Text("\(min(video.width, video.height))P")
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                 .foregroundColor(.primary)
-                .frame(width: 100, alignment: .leading)
+                .frame(width: 60, alignment: .leading)
+//            HStack(spacing: 6) {
+//                // 取宽高中较小的值，并加上 "P" (例如 1080P)
+//                Text("\(min(video.width, video.height))P")
+//                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+//                    .foregroundColor(.primary)
+//
+//                // 对比宽高判断横竖屏，并做成一个精致的小标签
+//                Text(video.width < video.height ? "竖屏" : "横屏")
+//                    .font(.system(size: 10, weight: .medium))
+//                    .foregroundColor(video.width < video.height ? AppTheme.accentBlue : .secondary)
+//                    .padding(.horizontal, 4)
+//                    .padding(.vertical, 2)
+//                    .background(
+//                        (video.width < video.height ? AppTheme.accentBlue : Color.secondary).opacity(0.15)
+//                    )
+//                    .cornerRadius(4)
+//            }
+//            .frame(width: 100, alignment: .leading)
             
             // 3. 分割线
             Rectangle()
