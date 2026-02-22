@@ -28,7 +28,7 @@ def main():
         is_hdr = info.get('HDR_bit') == "10" and info.get('HDR_type') == "1"
         if is_hdr:
             print(f"HDR: 是 (10-bit)")
-        print(f"FPS: {info['FPS']}")
+        print(f"FPS: {info['fps']}")
         print(f"比特率: {info['bit_rate']}")
         print(f"文件大小: {info['data_size']} bytes")
         print(f"文件哈希: {info['file_hash']}")
