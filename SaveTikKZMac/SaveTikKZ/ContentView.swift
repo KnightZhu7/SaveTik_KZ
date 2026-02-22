@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - 0. 样式与主题配置
 struct AppTheme {
@@ -195,12 +196,75 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("appAppearance") private var selectedAppearance: AppAppearance = .system
     
+    @Namespace private var animationNamespace
     
     // --- 核心数据状态 ---
     @State private var urlInput: String = ""
     @State private var isFetching: Bool = false
     @State private var videoList: [VideoStream] = []
     @State private var selectedVideos: Set<UUID> = []
+    
+    // --- 筛选与排序状态 ---
+    @State private var showFilterPopover: Bool = false
+    @State private var showOnlyHighestBitrate: Bool = false
+    @State private var primarySort: SortPriority = .resolution
+    
+    @State private var resolutionTokens: [FilterToken] = []
+    @State private var encodingTokens: [FilterToken] = []
+    
+    // 拖拽跟踪变量
+    @State private var draggedResToken: FilterToken?
+    @State private var draggedEncToken: FilterToken?
+     @State private var dragOffset: CGSize = .zero
+     @State private var draggingID: UUID? = nil
+    
+    // 🔥 核心逻辑：替换原本所有使用 videoList 的地方
+    var displayedVideos: [VideoStream] {
+        // 1. 过滤：分辨率和编码的亮灭状态
+        var result = videoList.filter { video in
+            let resName = "\(min(video.width, video.height))P"
+            let isResOn = resolutionTokens.first(where: { $0.name == resName })?.isOn ?? false
+            let isEncOn = encodingTokens.first(where: { $0.name == video.encoding })?.isOn ?? false
+            return isResOn && isEncOn
+        }
+        
+        // 2. 过滤：仅保留最高码率
+        if showOnlyHighestBitrate {
+            var grouped: [String: VideoStream] = [:]
+            for video in result {
+                let key = "\(min(video.width, video.height))P_\(video.encoding)_\(video.isHDR ? "hdr" : "sdr")"
+                if let existing = grouped[key] {
+                    if video.bitRate > existing.bitRate { grouped[key] = video }
+                } else {
+                    grouped[key] = video
+                }
+            }
+            result = Array(grouped.values)
+        }
+        
+        // 3. 🔥 完美三级排序：首级优先级 -> 次级优先级 -> 码率大到小
+        result.sort { v1, v2 in
+            let resName1 = "\(min(v1.width, v1.height))P"
+            let resName2 = "\(min(v2.width, v2.height))P"
+            
+            let resIndex1 = resolutionTokens.firstIndex(where: { $0.name == resName1 }) ?? 99
+            let resIndex2 = resolutionTokens.firstIndex(where: { $0.name == resName2 }) ?? 99
+            let encIndex1 = encodingTokens.firstIndex(where: { $0.name == v1.encoding }) ?? 99
+            let encIndex2 = encodingTokens.firstIndex(where: { $0.name == v2.encoding }) ?? 99
+            
+            if primarySort == .resolution {
+                if resIndex1 != resIndex2 { return resIndex1 < resIndex2 } // 1. 分辨率
+                if encIndex1 != encIndex2 { return encIndex1 < encIndex2 } // 2. 编码
+            } else {
+                if encIndex1 != encIndex2 { return encIndex1 < encIndex2 } // 1. 编码
+                if resIndex1 != resIndex2 { return resIndex1 < resIndex2 } // 2. 分辨率
+            }
+            
+            // 3. 兜底次级优先级：码率从大到小
+            return v1.bitRate > v2.bitRate
+        }
+        return result
+    }
     
     // 🔥 新增：暂存 Python 解析回来的元数据 (作者、发布时间、文案等)
     // 只有存下来，下载时发回去，文件名才能包含这些信息
@@ -233,7 +297,7 @@ struct ContentView: View {
     }
     
     var isAllSelected: Bool {
-        !videoList.isEmpty && selectedVideos.count == videoList.count
+        !displayedVideos.isEmpty && selectedVideos.count == displayedVideos.count
     }
     
     var hasResults: Bool {
@@ -281,7 +345,24 @@ struct ContentView: View {
                                         // 扒掉系统默认的灰色方块按钮底板，只展示我们漂亮的图标
                                         .buttonStyle(.plain)
                                         .help("切换外观模式")
-                                        
+                                        if hasResults {
+                                            Button(action: { showFilterPopover.toggle() }) {
+                                                Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                                    .font(.system(size: 18))
+                                                    .symbolRenderingMode(.palette)
+                                                    .foregroundStyle(Color.primary.opacity(0.6), .regularMaterial)
+                                                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                                                    // 🔥 1. 明确图标的响应大小，让箭头准确找到中心
+                                                    .frame(width: 24, height: 24)
+                                            }
+                                            .buttonStyle(.plain)
+                                            // 🔥 2. popover 必须紧贴 Button 绑定，放在 padding 前面
+                                            .popover(isPresented: $showFilterPopover, arrowEdge: .top) {
+                                                filterPopoverView
+                                            }
+                                            .padding(.leading, 8) // padding 移到这里
+                                            .transition(.opacity.combined(with: .scale))
+                                        }
                                         Spacer()
                                     }
                                     .padding(.leading, 20)
@@ -410,11 +491,32 @@ struct ContentView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isAllSelected)
                 .animation(.spring(), value: hasResults)
                 .animation(.spring(), value: isFetching)
+                // 在 Action Bar 的最后一个 .animation 修饰符后添加
+                .onChange(of: resolutionTokens) { _, _ in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedVideos.removeAll()
+                    }
+                }
+                .onChange(of: encodingTokens) { _, _ in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedVideos.removeAll()
+                    }
+                }
+                .onChange(of: showOnlyHighestBitrate) { _, _ in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedVideos.removeAll()
+                    }
+                }
+                .onChange(of: primarySort) { _, _ in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedVideos.removeAll()
+                    }
+                }
                 
                 // MARK: - Video List
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(videoList) { video in
+                        ForEach(displayedVideos) { video in
                             VideoRow(
                                 video: video,
                                 isSelected: selectedVideos.contains(video.id),
@@ -469,46 +571,62 @@ struct ContentView: View {
                                     showLogPopover.toggle()
                                 }
                                 .popover(isPresented: $showLogPopover, arrowEdge: .bottom) {
-                                    // --- 日志弹窗内容 (保持不变) ---
-                                    VStack(alignment: .leading, spacing: 0) {
+                                    // --- 🔥 风格统一的日志弹窗内容 ---
+                                    VStack(alignment: .leading, spacing: 16) {
                                         HStack {
                                             Text("状态日志")
                                                 .font(.headline)
                                             Spacer()
-                                            Button("清除") {
+                                            Button(action: {
                                                 logs.removeAll()
-                                                Task {
-                                                    await checkBackendHealth()
-                                                }
+                                                Task { await checkBackendHealth() }
+                                            }) {
+                                                Text("清除日志")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                                    .padding(.horizontal, 10)
+                                                    .padding(.vertical, 4)
+                                                    .background(Color.secondary.opacity(0.15))
+                                                    .cornerRadius(6)
                                             }
-                                            .font(.caption)
+                                            .buttonStyle(.plain)
                                         }
-                                        .padding()
-                                        .background(Color(nsColor: .controlBackgroundColor))
                                         
-                                        List {
-                                            ForEach(logs) { log in
-                                                HStack(alignment: .top, spacing: 8) {
-                                                    Image(systemName: log.type.icon)
-                                                        .foregroundColor(log.type.color)
-                                                        .font(.system(size: 12))
-                                                        .padding(.top, 2)
-                                                    
-                                                    VStack(alignment: .leading, spacing: 2) {
-                                                        Text(log.message)
-                                                            .font(.system(size: 13))
-                                                            .foregroundColor(.primary)
-                                                        Text(log.timeString)
-                                                            .font(.system(size: 10))
-                                                            .foregroundColor(.secondary)
+                                        Divider()
+                                        
+                                        ScrollView {
+                                            VStack(alignment: .leading, spacing: 12) {
+                                                if logs.isEmpty {
+                                                    Text("暂无日志记录")
+                                                        .font(.system(size: 13))
+                                                        .foregroundColor(.secondary)
+                                                        .frame(maxWidth: .infinity, alignment: .center)
+                                                        .padding(.top, 20)
+                                                } else {
+                                                    ForEach(logs) { log in
+                                                        HStack(alignment: .top, spacing: 10) {
+                                                            Image(systemName: log.type.icon)
+                                                                .foregroundColor(log.type.color)
+                                                                .font(.system(size: 12))
+                                                                .padding(.top, 2)
+                                                            
+                                                            VStack(alignment: .leading, spacing: 4) {
+                                                                Text(log.message)
+                                                                    .font(.system(size: 13))
+                                                                    .foregroundColor(.primary)
+                                                                Text(log.timeString)
+                                                                    .font(.system(size: 11))
+                                                                    .foregroundColor(.secondary.opacity(0.8))
+                                                            }
+                                                            Spacer()
+                                                        }
                                                     }
                                                 }
-                                                .padding(.vertical, 2)
                                             }
                                         }
-                                        .listStyle(.plain)
                                     }
-                                    .frame(width: 450, height: 300)
+                                    .padding(20)
+                                    .frame(width: 380, height: 300) // 🔥 宽度改为 380，与上方筛选器保持一致
                                 }
                                 .animation(.easeInOut(duration: 0.2), value: showLogPopover)
                                 .font(.system(size: 12))
@@ -701,6 +819,15 @@ struct ContentView: View {
                             self.videoList = streams
                             self.currentMetadata = meta ?? [:]
                             
+                            // 🔥 初始化筛选标签 (默认按从大到小原生排序)
+                            let uniqueRes = Array(Set(streams.map { "\(min($0.width, $0.height))P" }))
+                                .sorted { (Int($0.dropLast()) ?? 0) > (Int($1.dropLast()) ?? 0) }
+                            self.resolutionTokens = uniqueRes.map { FilterToken(name: $0, isOn: true) }
+                            
+                            let uniqueEnc = Array(Set(streams.map { $0.encoding })).sorted()
+                            self.encodingTokens = uniqueEnc.map { FilterToken(name: $0, isOn: true) }
+                            // -------------------------
+                            
                             updateStatus("解析完成: 获取到 \(streams.count) 个视频源", type: .success)
                         }
                         self.isFetching = false
@@ -724,7 +851,7 @@ struct ContentView: View {
     
     // 2. 单个下载逻辑
         func downloadSingle(video: VideoStream, isBatchCall: Bool = false) {
-            let index = (videoList.firstIndex(where: { $0.id == video.id }) ?? 0) + 1
+            let index = (displayedVideos.firstIndex(where: { $0.id == video.id }) ?? 0) + 1
             
             // 🔥 关键修复：如果不是批量调用（即用户点的单个下载），重置状态为“单任务模式”
             if !isBatchCall {
@@ -879,7 +1006,7 @@ struct ContentView: View {
     
     func selectAll() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            let allIDs = videoList.map { $0.id }
+            let allIDs = displayedVideos.map { $0.id }
             selectedVideos = Set(allIDs)
         }
     }
@@ -1039,3 +1166,290 @@ struct VideoRow: View {
 #Preview {
     ContentView()
 }
+
+// MARK: - 5. 筛选面板扩展与模型
+enum SortPriority: String, CaseIterable, Identifiable {
+    case resolution = "分辨率优先"
+    case encoding = "编码优先"
+    var id: String { self.rawValue }
+}
+
+struct FilterToken: Identifiable, Equatable {
+    let id = UUID()
+    let name: String
+    var isOn: Bool
+    
+    // 用于内部排序的数值大小（例如 1080P -> 1080）
+    var numericValue: Int {
+        Int(name.filter { $0.isNumber }) ?? 0
+    }
+}
+
+// 🔥 原生拖拽重新排序代理
+struct TokenDropDelegate: DropDelegate {
+    let item: FilterToken
+    @Binding var items: [FilterToken]
+    @Binding var draggedItem: FilterToken?
+    var onDropEnded: () -> Void // 🔥 新增：通过回调在父视图安全执行延迟
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedItem = self.draggedItem else { return }
+        // 只允许在亮着的标签之间拖动
+        guard item.isOn && draggedItem.isOn else { return }
+        guard draggedItem != item else { return }
+
+        if let from = items.firstIndex(of: draggedItem), let to = items.firstIndex(of: item) {
+            withAnimation(.default) {
+                self.items.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+            }
+        }
+    }
+    
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
+    }
+    
+    func performDrop(info: DropInfo) -> Bool {
+        // 🔥 执行回调，将延迟任务交回主视图
+        onDropEnded()
+        return true
+    }
+}
+
+extension ContentView {
+
+    func toggleToken(_ token: FilterToken, isRes: Bool) {
+        self.draggedResToken = nil
+        self.draggedEncToken = nil
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            var array = isRes ? resolutionTokens : encodingTokens
+            guard let index = array.firstIndex(where: { $0.id == token.id }) else { return }
+            if array[index].isOn && array.filter({ $0.isOn }).count == 1 { return }
+            array[index].isOn.toggle()
+            let onTokens  = array.filter { $0.isOn }
+            let offTokens = array.filter { !$0.isOn }.sorted {
+                isRes ? ($0.numericValue > $1.numericValue) : ($0.name < $1.name)
+            }
+            if isRes { resolutionTokens = onTokens + offTokens }
+            else     { encodingTokens  = onTokens + offTokens }
+        }
+    }
+
+    // MARK: 可拖拽标签行（横向）
+    @ViewBuilder
+    func draggableTokenRow(
+        tokens: Binding<[FilterToken]>,
+        draggedToken: Binding<FilterToken?>,
+        isRes: Bool
+    ) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tokens.wrappedValue) { token in
+                        TokenChip(
+                            token: token,
+                            isDragging: draggedToken.wrappedValue?.id == token.id,
+                            onTap: { toggleToken(token, isRes: isRes) }
+                        )
+                        .id(token.id)
+                        // ── 拖拽手势 ──────────────────────────────────────
+                        .gesture(
+                            token.isOn ?
+                            DragGesture(minimumDistance: 4, coordinateSpace: .named("hstack_\(isRes)"))
+                                .onChanged { value in
+                                    // 1. 标记当前正在拖的 token
+                                    if draggedToken.wrappedValue?.id != token.id {
+                                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                                            draggedToken.wrappedValue = token
+                                        }
+                                    }
+
+                                    // 2. 根据拖拽 X 位置重新排序
+                                    reorderTokens(
+                                        tokens: tokens,
+                                        dragged: token,
+                                        xLocation: value.location.x
+                                    )
+
+                                    // 3. 靠近左/右边界时自动滚动
+                                    let edgeThreshold: CGFloat = 50
+                                    if value.location.x < edgeThreshold {
+                                        // 往左找前一个
+                                        if let idx = tokens.wrappedValue.firstIndex(where: { $0.id == token.id }),
+                                           idx > 0 {
+                                            withAnimation(.easeOut(duration: 0.2)) {
+                                                proxy.scrollTo(tokens.wrappedValue[idx - 1].id, anchor: .leading)
+                                            }
+                                        }
+                                    } else if value.location.x > scrollTriggerRight(isRes: isRes) {
+                                        if let idx = tokens.wrappedValue.firstIndex(where: { $0.id == token.id }),
+                                           idx < tokens.wrappedValue.count - 1 {
+                                            withAnimation(.easeOut(duration: 0.2)) {
+                                                proxy.scrollTo(tokens.wrappedValue[idx + 1].id, anchor: .trailing)
+                                            }
+                                        }
+                                    }
+                                }
+                                .onEnded { _ in
+                                    // 无论在哪里松手，都清理状态
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                        draggedToken.wrappedValue = nil
+                                    }
+                                }
+                            : nil
+                        )
+                    }
+                }
+                .padding(.vertical, 2)
+                .coordinateSpace(name: "hstack_\(isRes)")
+            }
+        }
+    }
+
+    /// 根据拖拽的 X 坐标，判断应该插入到哪个位置并执行移动
+    private func reorderTokens(
+        tokens: Binding<[FilterToken]>,
+        dragged: FilterToken,
+        xLocation: CGFloat
+    ) {
+        var arr = tokens.wrappedValue
+        guard let fromIdx = arr.firstIndex(where: { $0.id == dragged.id }) else { return }
+
+        // 粗估：每个 chip 约 60pt（含间距），用坐标除以它来得到目标 index
+        let chipWidth: CGFloat = 64
+        let toIdx = max(0, min(arr.count - 1, Int(xLocation / chipWidth)))
+
+        // 只在 isOn 的范围内移动
+        guard arr[toIdx].isOn else { return }
+        guard toIdx != fromIdx else { return }
+
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            arr.move(
+                fromOffsets: IndexSet(integer: fromIdx),
+                toOffset: toIdx > fromIdx ? toIdx + 1 : toIdx
+            )
+            tokens.wrappedValue = arr
+        }
+    }
+
+    /// 滚动触发的右侧边界（基于面板宽度减去左侧标签宽度）
+    private func scrollTriggerRight(isRes: Bool) -> CGFloat {
+        // 面板总宽 380，左侧标签约 83pt（"分辨率:" + padding）
+        return 380 - 83 - 50
+    }
+
+    // MARK: - 筛选弹窗 UI
+    @ViewBuilder
+    var filterPopoverView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("高级筛选与排序").font(.headline)
+                Spacer()
+                Toggle("仅最高码率", isOn: $showOnlyHighestBitrate)
+                    .toggleStyle(.switch)
+                    .tint(AppTheme.accentBlue)
+                    .controlSize(.small)
+            }
+
+            Divider()
+
+            // 优先级切换
+            HStack {
+                Text("优先级:")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(width: 75, alignment: .leading)
+
+                HStack(spacing: 0) {
+                    ForEach(SortPriority.allCases) { priority in
+                        Text(priority.rawValue)
+                            .font(.system(size: 12, weight: primarySort == priority ? .bold : .medium))
+                            .foregroundColor(primarySort == priority ? .white : .primary.opacity(0.7))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(
+                                ZStack {
+                                    if primarySort == priority {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(AppTheme.accentBlue)
+                                            .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
+                                            .matchedGeometryEffect(id: "SEGMENT", in: animationNamespace)
+                                    }
+                                }
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    primarySort = priority
+                                }
+                            }
+                    }
+                }
+                .padding(2)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(8)
+                .frame(width: 180)
+            }
+
+            // 分辨率行
+            HStack(spacing: 8) {
+                Text("分辨率:")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(width: 75, alignment: .leading)
+
+                draggableTokenRow(
+                    tokens: $resolutionTokens,
+                    draggedToken: $draggedResToken,
+                    isRes: true
+                )
+            }
+
+            // 编码行
+            HStack(spacing: 8) {
+                Text("编    码:")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(width: 75, alignment: .leading)
+
+                draggableTokenRow(
+                    tokens: $encodingTokens,
+                    draggedToken: $draggedEncToken,
+                    isRes: false
+                )
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
+    }
+}
+
+// MARK: - Token 标签子视图（独立出来方便复用）
+private struct TokenChip: View {
+    let token: FilterToken
+    let isDragging: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Text(token.name)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .font(.system(size: 12, weight: .bold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(token.isOn ? AppTheme.accentBlue : Color.gray.opacity(0.2))
+            .foregroundColor(token.isOn ? .white : .primary.opacity(0.4))
+            .cornerRadius(6)
+            // 拖拽中：放大 + 轻微上浮阴影，松手后还原
+            .scaleEffect(isDragging ? 1.08 : 1.0)
+            .shadow(
+                color: isDragging ? .black.opacity(0.18) : .clear,
+                radius: isDragging ? 6 : 0,
+                x: 0, y: isDragging ? 3 : 0
+            )
+            .opacity(isDragging ? 0.85 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isDragging)
+            .onTapGesture { onTap() }
+    }
+}
+
