@@ -365,6 +365,7 @@ struct ContentView: View {
                                         }
                                         Spacer()
                                     }
+                                    .frame(height: 24)
                                     .padding(.leading, 20)
                                     .padding(.top, 10)
                                     .zIndex(1)
@@ -489,27 +490,37 @@ struct ContentView: View {
                 .frame(height: 44)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelectionMode)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isAllSelected)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasResults)
                 .animation(.spring(), value: hasResults)
                 .animation(.spring(), value: isFetching)
                 // 在 Action Bar 的最后一个 .animation 修饰符后添加
                 .onChange(of: resolutionTokens) { _, _ in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedVideos.removeAll()
+                    // 🔥 放入主队列异步执行，让原生组件自身的动画先安全闭环
+                    DispatchQueue.main.async {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedVideos.removeAll()
+                        }
                     }
                 }
                 .onChange(of: encodingTokens) { _, _ in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedVideos.removeAll()
+                    DispatchQueue.main.async {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedVideos.removeAll()
+                        }
                     }
                 }
                 .onChange(of: showOnlyHighestBitrate) { _, _ in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedVideos.removeAll()
+                    DispatchQueue.main.async {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedVideos.removeAll()
+                        }
                     }
                 }
                 .onChange(of: primarySort) { _, _ in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedVideos.removeAll()
+                    DispatchQueue.main.async {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedVideos.removeAll()
+                        }
                     }
                 }
                 
@@ -717,11 +728,13 @@ struct ContentView: View {
         
         // 🔥 修改逻辑：如果当前是“清除”模式（有结果或有报错）
         if shouldShowClearButton {
-            urlInput = ""
-            videoList = []
-            selectedVideos = []
-            currentMetadata = [:]
-            hasError = false
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                urlInput = ""
+                videoList = []
+                selectedVideos = []
+                currentMetadata = [:]
+                hasError = false
+            }
             textFieldID = UUID()  // 🔥 重置 ID，强制重建 TextField
             updateStatus("准备就绪", type: .info)
             requestFocus = true
@@ -1345,9 +1358,8 @@ extension ContentView {
             HStack {
                 Text("高级筛选与排序").font(.headline)
                 Spacer()
-                Toggle("仅最高码率", isOn: $showOnlyHighestBitrate)
+                Toggle("仅最高码率", isOn: $showOnlyHighestBitrate.animation(.spring(response: 0.3, dampingFraction: 0.7)))
                     .toggleStyle(.switch)
-                    .tint(AppTheme.accentBlue)
                     .controlSize(.small)
             }
 
