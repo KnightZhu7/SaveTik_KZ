@@ -19,12 +19,22 @@
 		B49B797B2F38FB0D00BAAEEF /* Exceptions for "SaveTikKZ" folder in "SaveTikKZ" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				APIService.swift,
 				Assets.xcassets,
-				ContentView.swift,
-				Models.swift,
-				PythonManager.swift,
+				Models/AppTheme.swift,
+				Models/FilterModel.swift,
+				Models/LogModel.swift,
+				Models/Models.swift,
 				SaveTikKZApp.swift,
+				Services/APIService.swift,
+				Services/PythonManager.swift,
+				ViewModels/ContentViewModel.swift,
+				Views/Components/ActionBarView.swift,
+				Views/Components/FilterPopoverView.swift,
+				Views/Components/HeaderView.swift,
+				Views/Components/SearchBarView.swift,
+				Views/Components/StatusBarView.swift,
+				Views/Components/VideoRow.swift,
+				Views/ContentView.swift,
 			);
 			target = B4F1E8902F3234CF00EDC2CB /* SaveTikKZ */;
 		};
