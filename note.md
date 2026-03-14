@@ -141,7 +141,7 @@ tab.get('https://www.youtube.com/')
     * 在 `Source` 中 `XHR/fetch Breakpoints` 监听请求字段 `aweme/post/`
     * 刷新页面，触发断点后在 `Scope` 中找到 `_xhr_open_args` 参数
     * 确定 `_xhr_open_args.url` 参数上下文及内容，其中包含必要签名参数 `a_bogus` ,其值长度 >180
-    * 在 `Call Stack` 中找到 `_xhr_open_args.url` 包含 `a_bogus` 参数在堆栈中出现的临界点，注意下面示例代码：
+    * 在 `Call Stack` 中找到 `_xhr_open_args.url` 包含 `a_bogus` 参数在堆栈中出现的临界点，注意类似下面的示例代码（bdms_x.x.x.x_fix.js）：
 
         ```javascript
         var m = n.apply(d, e);

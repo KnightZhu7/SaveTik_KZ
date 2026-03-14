@@ -14,14 +14,14 @@ struct ActionBarView: View {
         HStack {
             if !viewModel.videoList.isEmpty {
                 Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { viewModel.selectAll() }
+                    viewModel.selectAll()
                 }) {
                     Text("全选")
                         .font(.system(size: 13))
-                        .foregroundColor(viewModel.isAllSelected ? .secondary.opacity(0.5) : .secondary)
+                        .foregroundColor((viewModel.isAllSelected || viewModel.displayedVideos.isEmpty) ? .secondary.opacity(0.5) : .secondary)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.isAllSelected)
+                .disabled(viewModel.isAllSelected || viewModel.displayedVideos.isEmpty)
                 
                 if viewModel.isSelectionMode {
                     Button(action: {

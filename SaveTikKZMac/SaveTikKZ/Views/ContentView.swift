@@ -44,25 +44,35 @@ struct ContentView: View {
                 // 4. 视频列表滚动区
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(viewModel.displayedVideos) { video in
-                            VideoRow(
-                                video: video,
-                                isSelected: viewModel.selectedVideos.contains(video.id),
-                                isSelectionMode: viewModel.isSelectionMode,
-                                colorScheme: colorScheme,
-                                onSelectToggle: {
-                                    // 🔥 这里直接调用，把动画控制权完全交给 ViewModel
-                                    viewModel.toggleSelection(for: video.id)
-                                },
-                                onDownloadSingle: { viewModel.downloadSingle(video: video) }
-                            )
+                        if viewModel.displayedVideos.isEmpty && !viewModel.videoList.isEmpty {
+                            HStack {
+                                Spacer()
+                                Text("当前筛选条件下无匹配视频")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary.opacity(0.7))
+                                Spacer()
+                            }
+                            .frame(height: 50)
+                            .transition(.opacity) // 纯粹的淡入淡出
+                            
+                        } else {
+                            // 正常的视频列表
+                            ForEach(viewModel.displayedVideos) { video in
+                                VideoRow(
+                                    video: video,
+                                    isSelected: viewModel.selectedVideos.contains(video.id),
+                                    isSelectionMode: viewModel.isSelectionMode,
+                                    colorScheme: colorScheme,
+                                    onSelectToggle: { viewModel.toggleSelection(for: video.id) },
+                                    onDownloadSingle: { viewModel.downloadSingle(video: video) }
+                                )
+                                .transition(.opacity) // 正常的淡出
+                            }
                         }
                     }
                     .padding(.vertical, 10)
                 }
                 .padding(.horizontal, 60)
-                
-                Spacer()
                 
                 // 5. 底部状态与日志区
                 StatusBarView(
