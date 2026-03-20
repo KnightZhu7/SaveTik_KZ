@@ -16,6 +16,10 @@ ENV/
 .env
 .DS_Store
 
+# JavaScript
+bdms_sm3.js
+bdms_sgt.js
+
 # 忽略下载的资源
 VideoDownload/
 *.mp4
@@ -33,6 +37,6 @@ SaveTikKZMac/SaveTikKZ/api_server/
 .idea/
 
 savetik_toy_sample.py
-# api_server.py
 api_server_test.py
+request_test.py
 py2swiftUI.md

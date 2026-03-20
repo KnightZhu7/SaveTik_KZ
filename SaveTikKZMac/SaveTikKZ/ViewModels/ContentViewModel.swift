@@ -19,19 +19,38 @@ class ContentViewModel: ObservableObject {
     @Published var currentMetadata: [String: String] = [:]
     
     // --- 筛选与排序状态 ---
-    @Published var showOnlyHighestBitrate: Bool = false {
-        didSet { clearSelectionOnFilterChange() }
+    // 1. 记忆：最高码率开关
+    @Published var showOnlyHighestBitrate: Bool = UserDefaults.standard.bool(forKey: "SaveTik_HighestBitrate") {
+        didSet {
+            UserDefaults.standard.set(showOnlyHighestBitrate, forKey: "SaveTik_HighestBitrate")
+            clearSelectionOnFilterChange()
+        }
     }
-    @Published var primarySort: SortPriority = .resolution {
-        didSet { clearSelectionOnFilterChange() }
+    
+    // 2. 记忆：主排序优先级 (如果没存过，默认 fallback 到 .resolution)
+    @Published var primarySort: SortPriority = SortPriority(rawValue: UserDefaults.standard.string(forKey: "SaveTik_PrimarySort") ?? "") ?? .resolution {
+        didSet {
+            UserDefaults.standard.set(primarySort.rawValue, forKey: "SaveTik_PrimarySort")
+            clearSelectionOnFilterChange()
+        }
     }
+    
+    // 分辨率暂不记忆顺序（通常固定从大到小即可，保持原有逻辑）
     @Published var resolutionTokens: [FilterToken] = [] {
         didSet { clearSelectionOnFilterChange() }
     }
-    @Published var encodingTokens: [FilterToken] = [] {
-        didSet { clearSelectionOnFilterChange() }
-    }
     
+    // 3. 记忆：编码排序
+    @Published var encodingTokens: [FilterToken] = [] {
+        didSet {
+            // 只要编码数组发生改变（被拖拽重排，或者开关导致前后移动），就把当前的名字顺序保存下来
+            let currentOrder = encodingTokens.map { $0.name }
+            UserDefaults.standard.set(currentOrder, forKey: "SaveTik_EncodingOrder")
+            
+            clearSelectionOnFilterChange()
+        }
+    }
+
     // --- 底部状态栏控制 ---
     @Published var statusMessage: String = "准备就绪"
     @Published var statusIcon: String = "info.circle"
@@ -192,12 +211,30 @@ class ContentViewModel: ObservableObject {
                     self.videoList = streams
                     self.currentMetadata = meta ?? [:]
                     
+                    // --- 分辨率处理 (保持不变) ---
                     let uniqueRes = Array(Set(streams.map { "\(min($0.width, $0.height))P" }))
                         .sorted { (Int($0.dropLast()) ?? 0) > (Int($1.dropLast()) ?? 0) }
                     self.resolutionTokens = uniqueRes.map { FilterToken(name: $0, isOn: true) }
                     
-                    let uniqueEnc = Array(Set(streams.map { $0.encoding })).sorted()
-                    self.encodingTokens = uniqueEnc.map { FilterToken(name: $0, isOn: true) }
+                    // --- 🔥 编码处理：融合用户的记忆排序 ---
+                    let uniqueEnc = Array(Set(streams.map { $0.encoding }))
+                    
+                    // 读取本地存储的用户偏好顺序 (比如：["h265", "bytevc1", "h264"])
+                    let savedEncOrder = UserDefaults.standard.stringArray(forKey: "SaveTik_EncodingOrder") ?? []
+                    
+                    // 根据记忆顺序重新排序
+                    let sortedEnc = uniqueEnc.sorted { enc1, enc2 in
+                        // 查找这两个编码在记忆数组中的位置
+                        let idx1 = savedEncOrder.firstIndex(of: enc1) ?? 999
+                        let idx2 = savedEncOrder.firstIndex(of: enc2) ?? 999
+                        
+                        if idx1 != idx2 {
+                            return idx1 < idx2 // 谁在记忆里靠前，谁就排前面
+                        }
+                        return enc1 < enc2 // 如果都是新出现的编码，兜底按字母排
+                    }
+                    
+                    self.encodingTokens = sortedEnc.map { FilterToken(name: $0, isOn: true) }
                 }
                 
                 self.updateStatus("解析完成: 获取到 \(streams.count) 个视频源", type: .success)
