@@ -120,14 +120,66 @@ tab.get('https://www.youtube.com/')
 * 图片
     * `Search` 关键词请求： `post/`
     * 在 `Headers` 中找到监听位置 `web/aweme/post/`
-    * 数据解析 `Preview`
-
+    * 数据解析 `Preview` ，详细解析同Live图，区别在于 `live_photo_type` 的值，且视频链接 `video` 字段不存在
+    
 
 * Live图
     * `Search` 关键词请求： `post/`
     * 在 `Headers` 中找到监听位置 `web/aweme/post/`
     * 数据解析 `Preview`
         > `aweme_list`
+        >>`0` ：目标链接内容一般在第一个元素，其他元素为推荐内容
+        >>>`author`
+        >>>>`nickname` ：用户名
+        >>>
+        >>>`create_time` ：视频发布时间，使用 `datetime` 库转换
+        >>>`images` 
+        >>>>`0` ：目标链接第一张图片
+        >>>>>`live_photo_type` ：Live图为 1
+        >>>>>`height` ：图片高度
+        >>>>>`width` ：图片宽度
+        >>>>>`url_list` ：一般3个图片链接，前两个为 `.webp` 格式，最后一个为 `.jpeg` 格式
+        >>>>>>`0`
+        >>>>>>`1`
+        >>>>>>`2` ：一般这个链接为 `.jpeg` 格式，URL解析从此处开始提高效率
+        >>>>>
+        >>>>>`video` ：Live图为图片和视频合成，视频链接在此处
+        >>>>>>`bit_rate`
+        >>>>>>>`0` ：一般只有一个质量的视频文件
+        >>>>>>>>`play_addr`
+        >>>>>>>>>`url_list` ：视频下载链接
+        >>>>
+        >>>>`1` ：目标链接第二张图片
+        >>>>&nbsp;**⋮**
+        >>>
+
+    * 对于下载图片或者下载合成Live图，需要的是 `.jpeg` 格式的链接，因此需要通过 `url_list` 中最后一个链接进行下载，但为了保险起见，需要通过解析URL路径确定链接的格式是目标 `.jpeg` 格式，下面为示例代码：
+
+        ```python
+        from urllib.parse import urlparse
+
+        url_list = aweme_list[0]['images'][0]['url_list']
+        target_jpeg_url = None
+
+        for url in reversed(url_list):
+            parsed_path = urlparse(url).path
+            if parsed_path.lower().endswith('.jpeg'):
+                target_jpeg_url = url
+                break
+
+        if target_jpeg_url:
+            #====================================#
+            #  将 target_jpeg_url 传入对应数据接口  #
+            #====================================#
+            pass
+        else:
+            #==============#
+            #  提示链接无效  #
+            #==============#
+            pass
+        ```
+
+
 
 ---
 ## 6. 必要签名参数逆向

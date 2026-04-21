@@ -33,7 +33,10 @@ def download_video_stream(stream_info, metadata):
     video_url = url_list[0]
 
     # HDR 标识判断
-    is_hdr = stream_info.get('HDR_bit') == "10" and stream_info.get('HDR_type') == "1"
+    hdr_bit = str(stream_info.get('HDR_bit', ''))
+    hdr_type = str(stream_info.get('HDR_type', ''))
+    # 兼容 API 注入的 is_hdr 布尔值，以及原生字段
+    is_hdr = stream_info.get('is_hdr', False) or (hdr_bit == "10" and hdr_type == "1")
     hdr_tag = "_HDR" if is_hdr else ""
 
     # 构造文件名: {nickname}_{create_time}_{短边}p_{fps}fps_{encoding}_{bit_rate}{hdr_tag}.mp4
@@ -55,13 +58,17 @@ def download_video_stream(stream_info, metadata):
 
     print(f"[+] 正在下载: {filename}")
     try:
-        response = req.get(video_url, headers=headers, stream=True)
-        response.raise_for_status()
-        with open(save_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+        with req.get(video_url, headers=headers, stream=True, timeout=15) as response:
+            response.raise_for_status()
+            with open(save_path, 'wb') as f:
+                # chunk_size 设为 8192 (8KB) 或 65536 (64KB) 都可以
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk: # 过滤掉 keep-alive 的空块
+                        f.write(chunk)
         print(f"[+] 下载成功！文件保存为: {save_path}")
         return True
     except Exception as e:
         print(f"[-] 下载失败: {e}")
+        if os.path.exists(save_path):
+            os.remove(save_path)
         return False

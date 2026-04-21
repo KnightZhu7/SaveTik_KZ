@@ -34,15 +34,26 @@ enum LogType {
 
 // MARK: - 日志模型
 struct LogEntry: Identifiable {
-    let id = UUID()
+    let id: UUID
     let message: String
     let type: LogType
-    let time = Date()
+    let time: Date
+    let timeString: String // 🌟 核心修复：改为常量，避免 SwiftUI 重绘时疯狂计算
     
-    // 格式化时间显示 (例如 12:30:05)
-    var timeString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: time)
+    // 静态共享保持不变
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+    
+    // 手动实现初始化方法，签名与默认构造器保持一致，不影响外部调用
+    init(message: String, type: LogType) {
+        self.id = UUID()
+        self.message = message
+        self.type = type
+        self.time = Date()
+        // 🌟 初始化时仅计算一次
+        self.timeString = LogEntry.timeFormatter.string(from: self.time)
     }
 }

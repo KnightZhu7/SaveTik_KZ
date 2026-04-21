@@ -17,8 +17,7 @@ ENV/
 .DS_Store
 
 # JavaScript
-bdms_sm3.js
-bdms_sgt.js
+*.js
 
 # 忽略下载的资源
 VideoDownload/
@@ -39,4 +38,7 @@ SaveTikKZMac/SaveTikKZ/api_server/
 savetik_toy_sample.py
 api_server_test.py
 request_test.py
+monitor_pid.py
+plot_usage.py
 py2swiftUI.md
+*.csv

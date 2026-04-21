@@ -8,9 +8,33 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import time
+
+TASK_EXPIRY_SECONDS = 300
+
+def set_task_status(task_id, status):
+    tasks_db[task_id] = (status, time.time())
+
+def get_task_status(task_id):
+    entry = tasks_db.get(task_id)
+    if not entry:
+        return None
+    status, ts = entry
+    if time.time() - ts > TASK_EXPIRY_SECONDS:
+        del tasks_db[task_id]
+        return None
+    return status
+
+def cleanup_expired_tasks():
+    """清理过期任务，防止字典无限膨胀"""
+    now = time.time()
+    expired = [k for k, (_, ts) in tasks_db.items()
+               if now - ts > TASK_EXPIRY_SECONDS]
+    for k in expired:
+        del tasks_db[k]
 
 # 导入你的工具类
-from utils.video_parser import parse_video_data
+from utils.video_parser import parse_video_data, force_release_mac_memory
 from utils.video_downloader import download_video_stream
 from utils.browser_helper import init_browser_config
 
@@ -117,19 +141,28 @@ async def parse_video(request: ParseRequest):
 
 def run_download_task(task_id: str, stream_info: Dict, metadata: Dict):
     """后台执行下载 (增加异常捕获)"""
+    # try:
+    #     tasks_db[task_id] = "downloading"
+    #     success = download_video_stream(stream_info, metadata)
+    #     tasks_db[task_id] = "completed" if success else "failed"
+    #     print(f"[*] 任务 {task_id} 结束，结果: {tasks_db[task_id]}")
+    # except Exception as e:
+    #     print(f"[!] 下载任务崩溃: {e}")
+    #     tasks_db[task_id] = "failed"
     try:
-        tasks_db[task_id] = "downloading"
+        set_task_status(task_id, "downloading")
         success = download_video_stream(stream_info, metadata)
-        tasks_db[task_id] = "completed" if success else "failed"
-        print(f"[*] 任务 {task_id} 结束，结果: {tasks_db[task_id]}")
+        set_task_status(task_id, "completed" if success else "failed")
     except Exception as e:
         print(f"[!] 下载任务崩溃: {e}")
-        tasks_db[task_id] = "failed"
+        set_task_status(task_id, "failed")
 
 @app.post("/download")
 async def trigger_download(request: DownloadRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
-    tasks_db[task_id] = "pending"
+    # tasks_db[task_id] = "pending"
+    set_task_status(task_id, "pending")
+    cleanup_expired_tasks()
     
     background_tasks.add_task(run_download_task, task_id, request.stream_info, request.metadata)
     
@@ -137,10 +170,24 @@ async def trigger_download(request: DownloadRequest, background_tasks: Backgroun
 
 @app.get("/status/{task_id}")
 async def check_status(task_id: str):
-    status = tasks_db.get(task_id)
+    # status = tasks_db.get(task_id)
+    status = get_task_status(task_id)
     if not status:
         raise HTTPException(status_code=404, detail="任务不存在")
     return {"task_id": task_id, "status": status}
+
+@app.post("/clear")
+async def clear_memory():
+    """彻底清空任务记录并强制释放内存"""
+    # 1. 清空下载任务字典（防止字典无限膨胀）
+    cleared_count = len(tasks_db)
+    tasks_db.clear()
+    
+    # 2. 触发 Python 的深度内存释放（归还 macOS 内存）
+    force_release_mac_memory()
+    
+    print(f"[*] 前端触发清除：清理了 {cleared_count} 个任务状态，内存已释放。")
+    return {"status": "success"}
 
 # --- 启动入口 ---
 

@@ -12,6 +12,12 @@ struct SaveTik_KZApp: App {
     // 🔥 必须有这一行，绑定 AppDelegate
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
+    init() {
+        // 1. 永久关闭系统级 URLCache 的内存和磁盘配额
+        URLCache.shared.memoryCapacity = 0
+        URLCache.shared.diskCapacity = 0
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()

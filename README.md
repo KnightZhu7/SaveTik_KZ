@@ -23,7 +23,7 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
 
 ## Interface Preview (Mac)
 
-![SaveTik_KZ UI Dark](Image/Preview%20Dark%20New.png)
+![SaveTik_KZ UI Dark](Image/Preview%20Dark%20New%202.png)
 
 
 ## Requirements

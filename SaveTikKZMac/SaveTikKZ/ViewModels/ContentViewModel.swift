@@ -44,8 +44,10 @@ class ContentViewModel: ObservableObject {
     @Published var encodingTokens: [FilterToken] = [] {
         didSet {
             // 只要编码数组发生改变（被拖拽重排，或者开关导致前后移动），就把当前的名字顺序保存下来
-            let currentOrder = encodingTokens.map { $0.name }
-            UserDefaults.standard.set(currentOrder, forKey: "SaveTik_EncodingOrder")
+            if !encodingTokens.isEmpty {
+                let currentOrder = encodingTokens.map { $0.name }
+                UserDefaults.standard.set(currentOrder, forKey: "SaveTik_EncodingOrder")
+            }
             
             clearSelectionOnFilterChange()
         }
@@ -171,15 +173,28 @@ class ContentViewModel: ObservableObject {
         
         if shouldShowClearButton {
             // 🔥 用 withAnimation 包裹清除数据的动作，恢复退场动画
+            cancelAllPollingTasks()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                urlInput = ""
-                videoList = []
-                selectedVideos = []
-                currentMetadata = [:]
-                hasError = false
+                autoreleasepool {
+                    self.videoList.removeAll(keepingCapacity: false)
+                    self.selectedVideos.removeAll(keepingCapacity: false)
+                    self.currentMetadata.removeAll(keepingCapacity: false)
+                    self.resolutionTokens.removeAll(keepingCapacity: false)
+                    self.encodingTokens.removeAll(keepingCapacity: false)
+                    self.urlInput = ""
+                    self.hasError = false
+                }
             }
+            
+            URLCache.shared.removeAllCachedResponses()
+            URLCache.shared.memoryCapacity = 0
+            URLCache.shared.diskCapacity = 0
+            
             updateStatus("准备就绪", type: .info)
             resetFocus()
+            Task {
+                await APIService.shared.clearBackendMemory()
+            }
         } else {
             if urlInput.isEmpty {
                 if let clipboard = NSPasteboard.general.string(forType: .string) {
@@ -297,37 +312,58 @@ class ContentViewModel: ObservableObject {
         updateStatus("开始批量下载 \(batchTotal) 个视频", summary: "准备批量下载...", type: .loading)
         for video in targets { downloadSingle(video: video, isBatchCall: true) }
     }
-
+    private var pollingTasks: [String: Task<Void, Never>] = [:]
     private func startPolling(taskId: String, videoIndex: Int) {
-        Task {
-            var isRunning = true
-            while isRunning {
+        let task = Task { [weak self] in
+            guard let self else { return }
+            
+            while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { break }
+                
                 do {
                     let status = try await APIService.shared.checkStatus(taskId: taskId)
+                    
                     if status == "completed" {
-                        batchSuccess += 1
-                        activeTasksCount -= 1
-                        isRunning = false
-                        handlePollResult(videoIndex: videoIndex, isSuccess: true)
-                    } else if status == "failed" {
-                        batchError += 1
-                        activeTasksCount -= 1
-                        isRunning = false
-                        handlePollResult(videoIndex: videoIndex, isSuccess: false)
-                    } else {
-                        if batchTotal > 1 {
-                            let finished = batchSuccess + batchError
-                            self.statusMessage = "正在批量下载 (\(finished)/\(batchTotal))..."
-                        } else {
-                            self.statusMessage = "正在下载视频..."
+                        await MainActor.run {
+                            self.batchSuccess += 1
+                            self.activeTasksCount -= 1
+                            self.handlePollResult(videoIndex: videoIndex, isSuccess: true)
+                            self.pollingTasks.removeValue(forKey: taskId)
                         }
-                        self.statusIcon = LogType.loading.icon
-                        self.statusColor = LogType.loading.color
+                        break
+                    } else if status == "failed" {
+                        await MainActor.run {
+                            self.batchError += 1
+                            self.activeTasksCount -= 1
+                            self.handlePollResult(videoIndex: videoIndex, isSuccess: false)
+                            self.pollingTasks.removeValue(forKey: taskId)
+                        }
+                        break
+                    } else {
+                        await MainActor.run {
+                            if self.batchTotal > 1 {
+                                let finished = self.batchSuccess + self.batchError
+                                self.statusMessage = "正在批量下载 (\(finished)/\(self.batchTotal))..."
+                            } else {
+                                self.statusMessage = "正在下载视频..."
+                            }
+                            self.statusIcon = LogType.loading.icon
+                            self.statusColor = LogType.loading.color
+                        }
                     }
-                } catch { print("waiting...") }
+                } catch {
+                    // 轮询出错继续等待，不退出循环
+                }
             }
         }
+        
+        pollingTasks[taskId] = task
+    }
+    
+    private func cancelAllPollingTasks() {
+        pollingTasks.values.forEach { $0.cancel() }
+        pollingTasks.removeAll()
     }
     
     private func handlePollResult(videoIndex: Int, isSuccess: Bool) {

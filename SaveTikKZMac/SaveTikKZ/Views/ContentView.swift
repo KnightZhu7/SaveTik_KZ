@@ -21,16 +21,18 @@ struct ContentView: View {
     // 🔥 requestFocus 和 textFieldID 已经被彻底删除了
     
     var body: some View {
-        ZStack {
-            AppTheme.backgroundColor(for: colorScheme).ignoresSafeArea()
+        ZStack(alignment: .topTrailing) {
+            AppTheme.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
+//                .animation(.easeInOut(duration: 0.4), value: selectedAppearance)
+//                .animation(.easeInOut(duration: 0.3), value: colorScheme)
+//            Rectangle()
+//                .fill(.background)
+//                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // 1. 顶部 Header
-                HeaderView(
-                    viewModel: viewModel,
-                    selectedAppearance: $selectedAppearance,
-                    showFilterPopover: $showFilterPopover
-                )
+                HeaderView()
                 
                 // 2. 搜索框区域 (🔥 调用变得极简)
                 SearchBarView(viewModel: viewModel)
@@ -80,14 +82,28 @@ struct ContentView: View {
                     showLogPopover: $showLogPopover
                 )
             }
+            HeaderButtonGroup(
+                viewModel: viewModel,
+                selectedAppearance: $selectedAppearance,
+                showFilterPopover: $showFilterPopover
+            )
+            .padding(.trailing, 10)
+            .padding(.top, 8)                           // 🔥 从 10 改为 6
+            .ignoresSafeArea(.container, edges: .top)
+
         }
+//        .containerBackground(.regularMaterial, for: .window)
         .frame(minWidth: 700, minHeight: 550)
         .onAppear { applyAppearance(selectedAppearance) }
         .onChange(of: selectedAppearance) { _, newValue in applyAppearance(newValue) }
         .task {
             await viewModel.checkBackendHealth()
             while true {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                // 已连接后放宽到 10 秒，减少 70% 的空闲请求量
+                let interval: UInt64 = viewModel.isBackendOnline
+                    ? 10_000_000_000   // 10 秒
+                    : 3_000_000_000    // 3 秒（启动阶段快速探测）
+                try? await Task.sleep(nanoseconds: interval)
                 await viewModel.checkBackendHealth()
             }
         }

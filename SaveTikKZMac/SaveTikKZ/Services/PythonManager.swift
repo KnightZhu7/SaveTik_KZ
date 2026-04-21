@@ -96,10 +96,15 @@ class PythonManager {
         process?.standardOutput = pipe
         process?.standardError = pipe
         
-        pipe.fileHandleForReading.readabilityHandler = { handle in
-            if let line = String(data: handle.availableData, encoding: .utf8), !line.isEmpty {
-                print("[Python]: \(line.trimmingCharacters(in: .whitespacesAndNewlines))")
-            }
+        let fileHandle = pipe.fileHandleForReading
+        fileHandle.readabilityHandler = { [weak fileHandle] _ in
+            guard let fh = fileHandle else { return }
+            let data = fh.availableData
+            guard !data.isEmpty,
+                  let line = String(data: data, encoding: .utf8),
+                  !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            print("[Python]: \(line.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
         
         do {
@@ -112,10 +117,14 @@ class PythonManager {
     
     // 停止 Python 后端
     func stop() {
+        // ⚠️ 删除了 p.standardOutput = nil 和 p.standardError = nil
+        // 因为进程启动后修改管道会引发系统级 Crash
+        
         if let p = process, p.isRunning {
-            p.terminate()
+            p.terminate() // 直接发送 SIGTERM 终止进程
             print("🛑 Python 后端已停止")
         }
+        
         process = nil
     }
 }

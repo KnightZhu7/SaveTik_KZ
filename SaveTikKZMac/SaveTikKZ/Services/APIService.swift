@@ -22,6 +22,20 @@ class APIService {
     // 动态 baseURL，默认为空，等待 PythonManager 启动后通过 setPort 注入
     var baseURL = ""
     
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
+        // 限制连接池大小，防止空闲连接堆积
+        config.httpMaximumConnectionsPerHost = 2
+        // 超时设置
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
+    
     // 1. 设置端口 (由 PythonManager 调用)
     func setPort(_ port: UInt16) {
         self.baseURL = "http://127.0.0.1:\(port)"
@@ -40,13 +54,14 @@ class APIService {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 40
         
         // 构造 JSON: {"url": "..."}
         let body = ["url": url]
         request.httpBody = try JSONEncoder().encode(body)
         
         // 发送请求
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         
         // 检查 HTTP 状态码
         if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
@@ -76,7 +91,7 @@ class APIService {
         
         request.httpBody = try JSONEncoder().encode(requestBody)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         
         if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
             throw URLError(.badServerResponse)
@@ -94,10 +109,18 @@ class APIService {
         
         guard let endpoint = URL(string: "\(baseURL)/status/\(taskId)") else { throw URLError(.badURL) }
         
-        let (data, _) = try await URLSession.shared.data(from: endpoint)
+        let (data, _) = try await session.data(from: endpoint)
         
         // 解码: 使用 Models.swift 中定义的 StatusResponse
         let decoded = try JSONDecoder().decode(StatusResponse.self, from: data)
         return decoded.status
+    }
+    
+    // 5. 清除后台内存接口
+    func clearBackendMemory() async {
+        guard !baseURL.isEmpty, let endpoint = URL(string: "\(baseURL)/clear") else { return }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        _ = try? await session.data(for: request)
     }
 }

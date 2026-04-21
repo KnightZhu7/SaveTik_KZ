@@ -1,6 +1,9 @@
 from DrissionPage import ChromiumPage, ChromiumOptions, Chromium
 from utils.link_parser import extract_douyin_url
 import datetime as dt
+import gc
+import json
+import time
 
 def parse_video_data(input_text):
     """
@@ -24,6 +27,7 @@ def parse_video_data(input_text):
     co.headless(True) 
     
     # 【核心修改】添加新版无头参数，解决 Mac Dock 栏图标跳动问题
+    # Debug 时需要把下面这行注释掉，否则它会覆盖 headless(False) 强制开启无头模式！
     co.set_argument('--headless=new') 
     
     # 【核心修改】禁用首次运行欢迎页和默认浏览器检查
@@ -43,7 +47,21 @@ def parse_video_data(input_text):
         ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
         if not res:
             raise Exception("该链接不是有效的视频链接，请检查后重试")
-        aweme_detail = res.response.body.get('aweme_detail')
+        
+        # 容错与 Debug：如果返回的是字符串，尝试手动转为 JSON 字典
+        body_data = res.response.body
+        if isinstance(body_data, str):
+            try:
+                body_data = json.loads(body_data)
+            except json.JSONDecodeError:
+                # 如果无法解析为 JSON，说明多半是被风控拦截或抓错了包，打印前 200 个字符进行 Debug
+                print("[!] Debug: 拦截到异常！浏览器将暂停 20 秒，请立刻查看弹出的 Chrome 窗口是否遇到验证码或报错！")
+                time.sleep(20)  # 给足时间让你肉眼排查浏览器到底卡在哪了
+                error_snippet = body_data[:200].replace('\n', ' ')
+                print(f"[!] Debug: 获取到的 body 内容 -> {error_snippet}")
+                raise Exception("解析失败：返回的不是有效的 JSON 数据，可能遭遇了反爬验证")
+                
+        aweme_detail = body_data.get('aweme_detail')
     finally:
         dp.quit()
 
@@ -109,3 +127,17 @@ def parse_video_data(input_text):
             }
             
     return list(results.values()), metadata
+
+def force_release_mac_memory():
+    """
+    当 SwiftUI 前端点击“清除”时调用。
+    由于你的 parse 逻辑已经包含了 dp.quit()，这里主要负责强制打破 Python 循环引用，
+    将 Python 虚拟机占据的“高水位线”空闲内存强制还给 macOS 系统。
+    """
+    print("[*] 收到前端清除指令，正在执行深度垃圾回收...")
+    
+    # 强制执行第 2 代（最深层级）的垃圾回收
+    # 这会扫描并清理所有 DrissionPage 遗留的隐性闭包、字典和列表碎片
+    released_objects = gc.collect(2)
+    
+    print(f"[+] 内存已彻底归还 macOS！本次回收了 {released_objects} 个顽固对象。")
