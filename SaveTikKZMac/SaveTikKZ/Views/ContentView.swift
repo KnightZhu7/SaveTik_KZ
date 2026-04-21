@@ -18,23 +18,20 @@ struct ContentView: View {
     @State private var showFilterPopover: Bool = false
     @State private var showLogPopover: Bool = false
     
-    // 🔥 requestFocus 和 textFieldID 已经被彻底删除了
-    
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            // 背景层：加上颜色模式切换的平滑过渡
             AppTheme.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.1), value: colorScheme)
 //                .animation(.easeInOut(duration: 0.4), value: selectedAppearance)
-//                .animation(.easeInOut(duration: 0.3), value: colorScheme)
-//            Rectangle()
-//                .fill(.background)
-//                .ignoresSafeArea()
             
+            // 主体内容层：包含头部、搜索、列表、底部状态等
             VStack(spacing: 0) {
                 // 1. 顶部 Header
                 HeaderView()
                 
-                // 2. 搜索框区域 (🔥 调用变得极简)
+                // 2. 搜索框区域
                 SearchBarView(viewModel: viewModel)
                 
                 // 3. 操作栏 (全选、下载)
@@ -82,17 +79,20 @@ struct ContentView: View {
                     showLogPopover: $showLogPopover
                 )
             }
+            // 给整个主体 VStack 增加颜色模式切换的过渡动画
+            .animation(.easeInOut(duration: 0.1), value: colorScheme)
+            
+            // 悬浮层：单独的按钮组，不受上述颜色切换动画的影响
             HeaderButtonGroup(
                 viewModel: viewModel,
                 selectedAppearance: $selectedAppearance,
                 showFilterPopover: $showFilterPopover
             )
             .padding(.trailing, 10)
-            .padding(.top, 8)                           // 🔥 从 10 改为 6
+            .padding(.top, 8)
             .ignoresSafeArea(.container, edges: .top)
 
         }
-//        .containerBackground(.regularMaterial, for: .window)
         .frame(minWidth: 700, minHeight: 550)
         .onAppear { applyAppearance(selectedAppearance) }
         .onChange(of: selectedAppearance) { _, newValue in applyAppearance(newValue) }

@@ -7,6 +7,7 @@
 
 This is a simple and efficient Douyin web video downloader built on `DrissionPage`.
 
+---
 ## Features
 - Cross-platform support:
    - macOS: Native **SwiftUI** interface for a modern and smooth user experience
@@ -23,16 +24,21 @@ This is a simple and efficient Douyin web video downloader built on `DrissionPag
 
 ## Interface Preview (Mac)
 
-![SaveTik_KZ UI Dark](Image/Preview%20Dark%20New%202.png)
+<p align="center">
+  <img src="Image/Preview%20Dark%20New%201.png" width="600">
+</p>
+<p align="center">
+  <a href="https://github.com/KnightZhu7/SaveTik_KZ/releases/latest">Download Latest Release</a>
+</p>
 
-
+---
 ## Requirements
 
 - Python 3.6+
 - Chrome
 - Xcode
 
-## Quick Start
+## Quick Start (Windows)
 
 **Install dependencies**:
    ```bash
