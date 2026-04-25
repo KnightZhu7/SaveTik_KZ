@@ -56,7 +56,7 @@ def parse_video_data(input_text):
             except json.JSONDecodeError:
                 # 如果无法解析为 JSON，说明多半是被风控拦截或抓错了包，打印前 200 个字符进行 Debug
                 print("[!] Debug: 拦截到异常！浏览器将暂停 20 秒，请立刻查看弹出的 Chrome 窗口是否遇到验证码或报错！")
-                time.sleep(20)  # 给足时间让你肉眼排查浏览器到底卡在哪了
+                time.sleep(3600)  # 给足时间让你肉眼排查浏览器到底卡在哪了
                 error_snippet = body_data[:200].replace('\n', ' ')
                 print(f"[!] Debug: 获取到的 body 内容 -> {error_snippet}")
                 raise Exception("解析失败：返回的不是有效的 JSON 数据，可能遭遇了反爬验证")

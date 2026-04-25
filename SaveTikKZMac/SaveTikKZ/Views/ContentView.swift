@@ -36,6 +36,7 @@ struct ContentView: View {
                 
                 // 3. 操作栏 (全选、下载)
                 ActionBarView(viewModel: viewModel)
+                    .padding(.top, 2)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isSelectionMode)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isAllSelected)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.hasResults)
@@ -52,10 +53,9 @@ struct ContentView: View {
                                 Spacer()
                             }
                             .frame(height: 50)
-                            .transition(.opacity) // 纯粹的淡入淡出
+                            .transition(.opacity)
                             
                         } else {
-                            // 正常的视频列表
                             ForEach(viewModel.displayedVideos) { video in
                                 VideoRow(
                                     video: video,
@@ -65,13 +65,29 @@ struct ContentView: View {
                                     onSelectToggle: { viewModel.toggleSelection(for: video.id) },
                                     onDownloadSingle: { viewModel.downloadSingle(video: video) }
                                 )
-                                .transition(.opacity) // 正常的淡出
+                                .transition(.opacity)
                             }
                         }
                     }
+                    .padding(.top, 5)
                     .padding(.vertical, 10)
+                    .padding(.trailing, 16)
                 }
-                .padding(.horizontal, 60)
+                // 边缘模糊过渡（保持不变）
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .black, location: 0.05),
+                            .init(color: .black, location: 0.95),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .padding(.leading, 60)
+                .padding(.trailing, 44)
                 
                 // 5. 底部状态与日志区
                 StatusBarView(
