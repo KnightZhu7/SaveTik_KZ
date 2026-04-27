@@ -45,8 +45,8 @@ Supports Douyin image-post links:
 ## Interface Preview (Mac)
 
 <p align="center">
-  <img src="Image/Preview%20Dark%20New%201.png" width="300" />
-  <img src="Image/Preview%20Light%20New.png" width="300" />
+  <img src="Image/Preview%20Dark%20New%201.png" width="400" />
+  <img src="Image/Preview%20Light%20New.png" width="400" />
 </p>
 
 <p align="center">
