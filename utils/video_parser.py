@@ -4,6 +4,7 @@ import datetime as dt
 import gc
 import json
 import time
+from urllib.parse import urlparse
 
 def parse_video_data(input_text):
     """
@@ -18,9 +19,6 @@ def parse_video_data(input_text):
         raise Exception("未检测到有效的抖音链接，请检查输入内容")
 
     # 2. 使用 DrissionPage 获取数据
-    # co = ChromiumOptions().headless(True)
-    # dp = ChromiumPage(addr_or_opts=co)
-    # ==================== 修改开始 ====================
     co = ChromiumOptions()
     
     # 基础无头模式
@@ -41,18 +39,22 @@ def parse_video_data(input_text):
     dp = ChromiumPage(addr_or_opts=co)
     # ==================== 修改结束 ====================
     try:
-        dp.listen.start('web/aweme/detail/')
+        # 同时监听视频详情和图文/Live图详情的接口
+        dp.listen.start(['web/aweme/detail/', 'web/aweme/post/'])
         dp.get(video_link)
         res = dp.listen.wait(timeout=15)
         ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
         if not res:
-            raise Exception("该链接不是有效的视频链接，请检查后重试")
+            raise Exception("该链接不是有效的抖音内容链接，请检查后重试")
         
         # 容错与 Debug：如果返回的是字符串，尝试手动转为 JSON 字典
         body_data = res.response.body
         if isinstance(body_data, str):
             try:
                 body_data = json.loads(body_data)
+                # 再次检查是否为空或异常，某些情况下 DrissionPage 可能返回空 JSON 字符串
+                if not body_data:
+                     raise ValueError("解析为空 JSON 数据")
             except json.JSONDecodeError:
                 # 如果无法解析为 JSON，说明多半是被风控拦截或抓错了包，打印前 200 个字符进行 Debug
                 print("[!] Debug: 拦截到异常！浏览器将暂停 20 秒，请立刻查看弹出的 Chrome 窗口是否遇到验证码或报错！")
@@ -61,16 +63,25 @@ def parse_video_data(input_text):
                 print(f"[!] Debug: 获取到的 body 内容 -> {error_snippet}")
                 raise Exception("解析失败：返回的不是有效的 JSON 数据，可能遭遇了反爬验证")
                 
-        aweme_detail = body_data.get('aweme_detail')
+        # 根据请求 URL 区分是视频详情还是图文/Live图详情
+        url_path = res.request.url
+        aweme_data = None
+        
+        if 'web/aweme/detail/' in url_path:
+            aweme_data = body_data.get('aweme_detail')
+        elif 'web/aweme/post/' in url_path:
+            aweme_list = body_data.get('aweme_list', [])
+            aweme_data = aweme_list[0] if aweme_list else None # 通常目标内容在第一个
+            
     finally:
         dp.quit()
 
-    if not aweme_detail:
-        raise Exception("解析失败：未能获取到视频详情数据")
+    if not aweme_data:
+        raise Exception("解析失败：未能获取到有效内容数据")
 
     # 提取元数据用于命名
-    nickname = aweme_detail.get('author', {}).get('nickname', 'unknown')
-    create_time_ts = aweme_detail.get('create_time', 0)
+    nickname = aweme_data.get('author', {}).get('nickname', 'unknown')
+    create_time_ts = aweme_data.get('create_time', 0)
     create_time = dt.datetime.fromtimestamp(create_time_ts).strftime('%Y-%m-%d_%H-%M-%S')
     
     metadata = {
@@ -78,8 +89,64 @@ def parse_video_data(input_text):
         'create_time': create_time,
         'user_agent': ua
     }
+    
+    # --- 新增：判断是图文/Live图还是视频 ---
+    images = aweme_data.get('images')
+    if images:
+        parsed_media_list = []
+        is_live_photo_content = False
+        
+        for img_item in images:
+            live_photo_type = img_item.get('live_photo_type', 0)
+            
+            # 提取视频链接，辅助判断是否为 Live 图
+            live_video_url_list = []
+            video_data = img_item.get('video', {})
+            if video_data:
+                # 优先尝试从 play_addr 提取
+                live_video_url_list = video_data.get('play_addr', {}).get('url_list', [])
+                # 辅助判断：如果没有，则尝试从 bit_rate 结构中提取
+                if not live_video_url_list:
+                    bit_rate_list = video_data.get('bit_rate', [])
+                    if bit_rate_list and isinstance(bit_rate_list, list):
+                        live_video_url_list = bit_rate_list[0].get('play_addr', {}).get('url_list', [])
 
-    video = aweme_detail.get('video', {})
+            # 如果拥有 live_photo_type 标识，或者确实包含了视频链接，就认定为 Live 图
+            is_this_live_photo = (live_photo_type == 1) or bool(live_video_url_list)
+            if is_this_live_photo:
+                is_live_photo_content = True # 只要有一个是 Live 图，就标记整个内容为 Live 图
+            
+            url_list = img_item.get('url_list', [])
+            target_jpeg_url = None
+            
+            # 优先从 url_list 倒序查找 .jpeg 结尾的链接
+            for url in reversed(url_list):
+                parsed_path = urlparse(url).path
+                if parsed_path.lower().endswith('.jpeg'):
+                    target_jpeg_url = url
+                    break
+            
+            # 如果没有找到 .jpeg，则使用 url_list 中的最后一个链接作为兜底 (通常是最高质量)
+            if not target_jpeg_url and url_list:
+                target_jpeg_url = url_list[-1]
+            
+            image_info = {
+                'image_url': target_jpeg_url,
+                'width': img_item.get('width', 0),
+                'height': img_item.get('height', 0)
+            }
+            
+            # 如果是 Live 图，提取对应的视频链接
+            if is_this_live_photo and live_video_url_list:
+                image_info['live_video_url'] = live_video_url_list[0]
+            
+            parsed_media_list.append(image_info)
+            
+        media_type = "live_photo" if is_live_photo_content else "image"
+        return media_type, parsed_media_list, metadata
+
+    # 如果不是图文/Live图，那就是视频
+    video = aweme_data.get('video', {})
     bit_rate_list = video.get('bit_rate', [])
     
     # 预先获取 H265 对应的 hash，用于辅助判断编码格式
@@ -126,7 +193,7 @@ def parse_video_data(input_text):
                 'create_time': create_time
             }
             
-    return list(results.values()), metadata
+    return "video", list(results.values()), metadata
 
 def force_release_mac_memory():
     """

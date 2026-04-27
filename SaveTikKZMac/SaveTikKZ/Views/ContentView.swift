@@ -41,37 +41,45 @@ struct ContentView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isAllSelected)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.hasResults)
                 
-                // 4. 视频列表滚动区
+                // 4. 视频 / 图片 列表滚动区
                 ScrollView {
-                    VStack(spacing: 8) {
-                        if viewModel.displayedVideos.isEmpty && !viewModel.videoList.isEmpty {
-                            HStack {
-                                Spacer()
-                                Text("当前筛选条件下无匹配视频")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary.opacity(0.7))
-                                Spacer()
-                            }
-                            .frame(height: 50)
+                    // 🔥 判断：如果图片列表里有数据，就渲染我们刚写的图片网格
+                    if !viewModel.imageList.isEmpty {
+                        ImageGridView(viewModel: viewModel)
                             .transition(.opacity)
-                            
-                        } else {
-                            ForEach(viewModel.displayedVideos) { video in
-                                VideoRow(
-                                    video: video,
-                                    isSelected: viewModel.selectedVideos.contains(video.id),
-                                    isSelectionMode: viewModel.isSelectionMode,
-                                    colorScheme: colorScheme,
-                                    onSelectToggle: { viewModel.toggleSelection(for: video.id) },
-                                    onDownloadSingle: { viewModel.downloadSingle(video: video) }
-                                )
+                    }
+                    // 否则走原来的视频列表逻辑
+                    else {
+                        VStack(spacing: 8) {
+                            if viewModel.displayedVideos.isEmpty && !viewModel.videoList.isEmpty {
+                                HStack {
+                                    Spacer()
+                                    Text("当前筛选条件下无匹配视频")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary.opacity(0.7))
+                                    Spacer()
+                                }
+                                .frame(height: 50)
                                 .transition(.opacity)
+                                
+                            } else {
+                                ForEach(viewModel.displayedVideos) { video in
+                                    VideoRow(
+                                        video: video,
+                                        isSelected: viewModel.selectedVideos.contains(video.id),
+                                        isSelectionMode: viewModel.isSelectionMode,
+                                        colorScheme: colorScheme,
+                                        onSelectToggle: { viewModel.toggleSelection(for: video.id) },
+                                        onDownloadSingle: { viewModel.downloadSingle(video: video) }
+                                    )
+                                    .transition(.opacity)
+                                }
                             }
                         }
+                        .padding(.top, 5)
+                        .padding(.vertical, 10)
+                        .padding(.trailing, 16)
                     }
-                    .padding(.top, 5)
-                    .padding(.vertical, 10)
-                    .padding(.trailing, 16)
                 }
                 // 边缘模糊过渡（保持不变）
                 .mask(

@@ -40,5 +40,6 @@ api_server_test.py
 request_test.py
 monitor_pid.py
 plot_usage.py
+test.py
 py2swiftUI.md
 *.csv

@@ -104,7 +104,7 @@ struct SearchBarView: View {
         HStack(spacing: 12) {
             FixedTextField(
                 text: $viewModel.urlInput,
-                placeholder: " 粘贴抖音视频分享链接... ",
+                placeholder: " 粘贴抖音分享链接... ",
                 onSubmit: submitAction,
                 requestFocus: $requestFocus
             )

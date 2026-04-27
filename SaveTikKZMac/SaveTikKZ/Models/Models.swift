@@ -7,13 +7,12 @@
 
 import Foundation
 
-// 1. 核心视频流模型 (对应 Python 的 streams 列表项)
+// 1. 核心视频流模型 (保持不变)
 struct VideoStream: Codable, Identifiable {
-    let id = UUID() // SwiftUI 列表唯一标识
+    let id = UUID()
     
-    // UI 展示需要的字段
     let nickname: String
-    let create_time: String // 确保不是 createTime
+    let create_time: String
     let width: Int
     let height: Int
     let encoding: String
@@ -22,11 +21,8 @@ struct VideoStream: Codable, Identifiable {
     let fps: Int
     let isHDR: Bool       // Python 是 is_hdr
     
-    
-    // 🔥 下载必需字段 (虽然 UI 不显示，但必须存着发回给后端)
     let urlList: [String]
     
-    // 键值映射: Python(下划线) <-> Swift(驼峰)
     enum CodingKeys: String, CodingKey {
         case nickname
         case create_time = "create_time"
@@ -37,10 +33,25 @@ struct VideoStream: Codable, Identifiable {
         case urlList = "url_list"
     }
     
-    // 辅助属性：生成显示标题
     var displayTitle: String {
         let sizeMB = Double(dataSize) / 1024 / 1024
         return "\(width)x\(height) | \(encoding) | \(String(format: "%.1f MB", sizeMB))"
+    }
+}
+
+// 🔥 新增：图片/Live图流模型
+struct ImageItem: Codable, Identifiable {
+    let id = UUID()
+    let imageUrl: String
+    let width: Int
+    let height: Int
+    let liveVideoUrl: String? // Live图独有，可能为空
+    
+    enum CodingKeys: String, CodingKey {
+        case imageUrl = "image_url"
+        case width
+        case height
+        case liveVideoUrl = "live_video_url"
     }
 }
 
@@ -50,18 +61,29 @@ struct ParseResponse: Codable {
     let data: ParseDataContainer
 }
 
+// 🔥 修改：适配动态返回的数据结构
 struct ParseDataContainer: Codable {
-    let streams: [VideoStream]
-    // metadata 暂时用字典接收，如果 Python 返回的是复杂结构，这里可以改
+    let mediaType: String            // 新增: "video", "image", 或 "live_photo"
     let metadata: [String: String]?
+    
+    // 下面两个字段变为可选（Optional），因为它们不会同时存在
+    let streams: [VideoStream]?      // 仅当 mediaType == "video" 时存在
+    let imageData: [ImageItem]?      // 仅当 mediaType == "image" 或 "live_photo" 时存在
+    
+    enum CodingKeys: String, CodingKey {
+        case mediaType = "media_type"
+        case metadata
+        case streams
+        case imageData = "image_data"
+    }
 }
 
-// 3. 下载接口响应
+// 3. 下载接口响应 (保持不变)
 struct DownloadResponse: Codable {
     let task_id: String
 }
 
-// 4. 状态接口响应
+// 4. 状态接口响应 (保持不变)
 struct StatusResponse: Codable {
     let status: String
 }

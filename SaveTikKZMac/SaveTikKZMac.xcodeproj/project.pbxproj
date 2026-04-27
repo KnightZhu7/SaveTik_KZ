@@ -26,12 +26,17 @@
 				Models/Models.swift,
 				SaveTikKZApp.swift,
 				Services/APIService.swift,
+				Services/MediaCacheManager.swift,
+				Services/PhotoExportManager.swift,
 				Services/PythonManager.swift,
 				ViewModels/ContentViewModel.swift,
 				Views/Components/ActionBarView.swift,
 				Views/Components/FilterPopoverView.swift,
 				Views/Components/HeaderButtonGroup.swift,
 				Views/Components/HeaderView.swift,
+				Views/Components/HoverVideoPlayer.swift,
+				Views/Components/ImageGridCell.swift,
+				Views/Components/ImageGridView.swift,
 				Views/Components/SearchBarView.swift,
 				Views/Components/StatusBarView.swift,
 				Views/Components/VideoRow.swift,
@@ -278,7 +283,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 0;
 				DEVELOPMENT_TEAM = QACQ9N662F;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -303,7 +308,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.KnightZhu.SaveTikKZ;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -330,7 +335,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 0;
 				DEVELOPMENT_TEAM = QACQ9N662F;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -355,7 +360,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.KnightZhu.SaveTikKZ;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

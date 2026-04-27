@@ -12,20 +12,23 @@ struct ActionBarView: View {
     
     var body: some View {
         HStack {
-            if !viewModel.videoList.isEmpty {
+            if viewModel.hasResults {
                 Button(action: {
                     viewModel.selectAll()
                 }) {
                     Text("全选")
                         .font(.system(size: 13))
-                        .foregroundColor((viewModel.isAllSelected || viewModel.displayedVideos.isEmpty) ? .secondary.opacity(0.5) : .secondary)
+                        .foregroundColor((viewModel.isAllSelected) ? .secondary.opacity(0.5) : .secondary)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.isAllSelected || viewModel.displayedVideos.isEmpty)
+                .disabled(viewModel.isAllSelected)
                 
                 if viewModel.isSelectionMode {
                     Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { viewModel.selectedVideos.removeAll() }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            viewModel.selectedVideos.removeAll()
+                            viewModel.selectedImages.removeAll()
+                        }
                     }) {
                         Text("取消").font(.system(size: 13)).foregroundColor(.secondary)
                     }
@@ -34,13 +37,19 @@ struct ActionBarView: View {
                     .transition(.opacity)
                     
                     Text("|").foregroundColor(.secondary.opacity(0.3)).padding(.horizontal, 8)
-                    Text("已选 \(viewModel.selectedVideos.count) 项").font(.system(size: 13)).foregroundColor(.secondary).transition(.opacity)
+                    
+                    let count = viewModel.selectedVideos.count + viewModel.selectedImages.count
+                    Text("已选 \(count) 项").font(.system(size: 13)).foregroundColor(.secondary).transition(.opacity)
                 }
                 
                 Spacer()
                 
+                // (全局 Live 下载开关已移除，由每张图独立控制)
+                
                 if viewModel.isSelectionMode {
-                    Button(action: { viewModel.downloadSelected() }) {
+                    Button(action: {
+                        viewModel.downloadSelected()
+                    }) {
                         HStack {
                             Image(systemName: "arrow.down.circle.fill")
                             Text("下载选中")

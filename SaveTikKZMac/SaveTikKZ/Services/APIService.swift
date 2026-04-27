@@ -8,10 +8,14 @@
 import Foundation
 
 // MARK: - 请求体结构 (专用)
-// 这个结构体 Models.swift 里没有，所以我们在文件内部私有定义，
-// 专门用来把数据打包发给 Python 的 /download 接口
 private struct DownloadRequestBody: Encodable {
     let stream_info: VideoStream
+    let metadata: [String: String]
+}
+
+// 🔥 新增：用于发送图片/Live图下载请求的结构体
+private struct DownloadImageRequestBody: Encodable {
+    let stream_info: ImageItem
     let metadata: [String: String]
 }
 
@@ -42,8 +46,8 @@ class APIService {
         print("✅ Swift API 目标地址已更新: \(self.baseURL)")
     }
     
-    // 2. 解析视频接口
-    func parse(url: String) async throws -> ([VideoStream], [String: String]?) {
+    // 2. 解析接口 (🔥 已修改为返回 ParseDataContainer)
+    func parse(url: String) async throws -> ParseDataContainer {
         // 安全检查：防止后端未启动时发起请求
         guard !baseURL.isEmpty else {
             throw NSError(domain: "APIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "后端服务尚未就绪"])
@@ -65,16 +69,15 @@ class APIService {
         
         // 检查 HTTP 状态码
         if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-            // 如果解析失败，尝试解码错误信息，或者直接抛出错误
             throw URLError(.badServerResponse)
         }
         
-        // 解码: 使用 Models.swift 中定义的 ParseResponse
+        // 解码
         let decoded = try JSONDecoder().decode(ParseResponse.self, from: data)
-        return (decoded.data.streams, decoded.data.metadata)
+        return decoded.data
     }
     
-    // 3. 发送下载指令接口
+    // 3. 发送下载指令接口 (视频)
     func download(stream: VideoStream, metadata: [String: String]?) async throws -> String {
         guard !baseURL.isEmpty else { throw URLError(.badURL) }
         guard let endpoint = URL(string: "\(baseURL)/download") else { throw URLError(.badURL) }
@@ -97,7 +100,32 @@ class APIService {
             throw URLError(.badServerResponse)
         }
         
-        // 解码: 使用 Models.swift 中定义的 DownloadResponse
+        let decoded = try JSONDecoder().decode(DownloadResponse.self, from: data)
+        return decoded.task_id
+    }
+    
+    // 🔥 新增：发送下载指令接口 (图片/Live图)
+    func download(imageItem: ImageItem, metadata: [String: String]?) async throws -> String {
+        guard !baseURL.isEmpty else { throw URLError(.badURL) }
+        guard let endpoint = URL(string: "\(baseURL)/download") else { throw URLError(.badURL) }
+        
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = DownloadImageRequestBody(
+            stream_info: imageItem,
+            metadata: metadata ?? [:]
+        )
+        
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            throw URLError(.badServerResponse)
+        }
+        
         let decoded = try JSONDecoder().decode(DownloadResponse.self, from: data)
         return decoded.task_id
     }

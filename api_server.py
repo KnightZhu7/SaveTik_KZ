@@ -111,25 +111,33 @@ async def parse_video(request: ParseRequest):
     
     try:
         # 1. 调用解析逻辑 (增加 try-except 防止崩溃)
-        streams, metadata = parse_video_data(request.url)
+        media_type, data_payload, metadata = parse_video_data(request.url)
         
         # 2. 预处理数据给 SwiftUI
-        for s in streams:
-            # 安全处理 HDR 逻辑 (转成字符串再比较，防止 int/str 不一致)
-            hdr_bit = str(s.get('HDR_bit', ''))
-            hdr_type = str(s.get('HDR_type', ''))
-            s['is_hdr'] = (hdr_bit == "10") and (hdr_type == "1")
-            
-            # 确保 fps 字段存在
-            if 'fps' not in s:
-                s['fps'] = s.get('FPS', '')
+        response_data = {
+            "media_type": media_type,
+            "metadata": metadata
+        }
+
+        if media_type == "video":
+            # 如果是视频，对 streams 进行预处理
+            for s in data_payload:
+                # 安全处理 HDR 逻辑 (转成字符串再比较，防止 int/str 不一致)
+                hdr_bit = str(s.get('HDR_bit', ''))
+                hdr_type = str(s.get('HDR_type', ''))
+                s['is_hdr'] = (hdr_bit == "10") and (hdr_type == "1")
                 
+                # 确保 fps 字段存在
+                if 'fps' not in s:
+                    s['fps'] = s.get('FPS', '')
+            response_data["streams"] = data_payload
+        elif media_type == "image" or media_type == "live_photo":
+            # 如果是图片或 Live 图，直接将解析后的图片/Live图信息作为 image_data
+            response_data["image_data"] = data_payload
+        
         return {
             "status": "success",
-            "data": {
-                "streams": streams,
-                "metadata": metadata
-            }
+            "data": response_data
         }
         
     except HTTPException as he:
