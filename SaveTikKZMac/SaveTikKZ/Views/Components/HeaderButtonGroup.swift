@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct HeaderButtonGroup: View {
     @ObservedObject var viewModel: ContentViewModel
@@ -15,28 +16,42 @@ struct HeaderButtonGroup: View {
     @State private var appearanceHovered = false
     @State private var filterHovered = false
     
+    // 监听 Option 键状态
+    @State private var isOptionPressed = false
+    @State private var flagsMonitor: Any?
+    
     private let hoverInset: CGFloat = 3
     
     var body: some View {
         let isImageMode = !viewModel.imageList.isEmpty
+        // 🔥 新增：是否允许使用 Option 筛选功能（必须同时拥有 Live 和 JPEG）
+        let canFilterImages = viewModel.hasMixedImageTypes
         
         HStack(spacing: 0) {
-            // 按钮 1：筛选 / 网格切换（左）
+            // 按钮 1：筛选 / 网格切换 / Live过滤（左）
             Button {
                 if isImageMode {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        viewModel.preferredGridColumns = viewModel.preferredGridColumns == 2 ? 3 : 2
+                        // 🔥 修改：只有按下 Option 且 允许筛选 时，才触发过滤
+                        if isOptionPressed && canFilterImages {
+                            viewModel.imageFilterMode = viewModel.imageFilterMode.next
+                        } else {
+                            // 否则永远是正常的网格列数切换
+                            viewModel.preferredGridColumns = viewModel.preferredGridColumns == 2 ? 3 : 2
+                        }
                     }
                 } else {
                     showFilterPopover.toggle()
                 }
             } label: {
                 buttonIcon(
+                    // 🔥 修改：图标的显示也加入了 canFilterImages 判断
                     systemName: isImageMode
-                        ? (viewModel.preferredGridColumns == 2 ? "rectangle.grid.2x2" : "square.grid.3x2")
+                        ? ((isOptionPressed && canFilterImages) ? viewModel.imageFilterMode.icon : (viewModel.preferredGridColumns == 2 ? "rectangle.grid.2x2" : "square.grid.3x2"))
                         : "line.3.horizontal.decrease",
                     enabled: isImageMode || !viewModel.videoList.isEmpty,
-                    hovered: filterHovered && (isImageMode || !viewModel.videoList.isEmpty)
+                    hovered: filterHovered && (isImageMode || !viewModel.videoList.isEmpty),
+                    isHighlighted: false
                 )
             }
             .buttonStyle(.plain)
@@ -52,8 +67,8 @@ struct HeaderButtonGroup: View {
                         }
                 }
             }
-            // 🔥 修改：根据模式显示更精确的 Help 提示
-            .help(isImageMode ? (viewModel.preferredGridColumns == 2 ? "最少 2 列" : "最少 3 列") : (!viewModel.videoList.isEmpty ? "筛选" : "暂无内容可筛选"))
+            // 🔥 修改：悬停提示同样加入了 canFilterImages 判断
+            .help(isImageMode ? ((isOptionPressed && canFilterImages) ? "切换过滤模式 (当前: \(filterModeName))" : (viewModel.preferredGridColumns == 2 ? "最少 2 列" : "最少 3 列")) : (!viewModel.videoList.isEmpty ? "筛选" : "暂无内容可筛选"))
             .padding(.leading, hoverInset)
             .padding(.vertical, hoverInset)
             
@@ -78,14 +93,14 @@ struct HeaderButtonGroup: View {
                 buttonIcon(
                     systemName: "ellipsis",
                     enabled: true,
-                    hovered: appearanceHovered
+                    hovered: appearanceHovered,
+                    isHighlighted: false
                 )
             }
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
             .contentShape(Capsule())
             .onHover { appearanceHovered = $0 }
-            // 🔥 修改：补上外观按钮的 Help 提示
             .help("切换外观模式")
             .padding(.trailing, hoverInset)
             .padding(.vertical, hoverInset)
@@ -94,13 +109,37 @@ struct HeaderButtonGroup: View {
         .id(selectedAppearance)
         .animation(.easeInOut(duration: 0.12), value: appearanceHovered)
         .animation(.easeInOut(duration: 0.12), value: filterHovered)
+        .onAppear {
+            flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    isOptionPressed = event.modifierFlags.contains(.option)
+                }
+                return event
+            }
+            isOptionPressed = NSEvent.modifierFlags.contains(.option)
+        }
+        .onDisappear {
+            if let monitor = flagsMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+    }
+    
+    // 辅助计算当前筛选模式的中文名称
+    private var filterModeName: String {
+        switch viewModel.imageFilterMode {
+        case .all: return "显示全部"
+        case .liveOnly: return "仅 Live 图"
+        case .jpegOnly: return "仅静态图"
+        }
     }
     
     @ViewBuilder
     private func buttonIcon(
         systemName: String,
         enabled: Bool,
-        hovered: Bool
+        hovered: Bool,
+        isHighlighted: Bool
     ) -> some View {
         let buttonSize: CGFloat = 36
         let hoverWidth  = buttonSize - hoverInset
@@ -113,7 +152,7 @@ struct HeaderButtonGroup: View {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
-                .foregroundColor(.primary)
+                .foregroundColor(isHighlighted ? AppTheme.accentBlue : .primary)
                 .opacity(enabled ? 1.0 : 0.3)
         }
         .frame(width: hoverWidth, height: hoverHeight)

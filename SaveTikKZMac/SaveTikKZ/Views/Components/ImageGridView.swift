@@ -22,7 +22,7 @@ struct ImageGridView: View {
     private func columnsData() -> [[(Int, ImageItem)]] {
         let count = columnCount
         var cols: [[(Int, ImageItem)]] = Array(repeating: [], count: count)
-        for (index, item) in viewModel.imageList.enumerated() {
+        for (index, item) in viewModel.displayedImages.enumerated() {
             cols[index % count].append((index, item))
         }
         return cols

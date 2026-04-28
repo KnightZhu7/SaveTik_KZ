@@ -24,6 +24,11 @@ class ContentViewModel: ObservableObject {
     
     @Published var currentMetadata: [String: String] = [:]
     
+    // 图片筛选模式状态
+    @Published var imageFilterMode: ImageFilterMode = .all {
+        didSet { clearImageSelectionOnFilterChange() }
+    }
+    
     @Published var preferredGridColumns: Int = UserDefaults.standard.integer(forKey: "SaveTik_GridCols") == 0 ? 2 : UserDefaults.standard.integer(forKey: "SaveTik_GridCols") {
         didSet { UserDefaults.standard.set(preferredGridColumns, forKey: "SaveTik_GridCols") }
     }
@@ -60,13 +65,61 @@ class ContentViewModel: ObservableObject {
     @Published var hasError: Bool = false
 
     var isSelectionMode: Bool { !selectedVideos.isEmpty || !selectedImages.isEmpty }
+    
+    // 🔥 修复：基于 displayedImages 计算是否全选
     var isAllSelected: Bool {
         if !displayedVideos.isEmpty { return selectedVideos.count == displayedVideos.count }
-        if !imageList.isEmpty { return selectedImages.count == imageList.count }
+        if !displayedImages.isEmpty { return selectedImages.count == displayedImages.count }
         return false
     }
     var hasResults: Bool { !videoList.isEmpty || !imageList.isEmpty }
     var shouldShowClearButton: Bool { hasResults || hasError }
+    
+    var hasMixedImageTypes: Bool {
+        guard !imageList.isEmpty else { return false }
+        let hasLive = imageList.contains { $0.liveVideoUrl != nil && !$0.liveVideoUrl!.isEmpty }
+        let hasJpeg = imageList.contains { $0.liveVideoUrl == nil || $0.liveVideoUrl!.isEmpty }
+        return hasLive && hasJpeg
+    }
+    
+    // 🔥 新增：检查是否满足“合成 Live 图”的严苛条件
+    var synthesisPair: (cover: (Int, ImageItem), video: (Int, ImageItem))? {
+        guard selectedImages.count == 2 else { return nil }
+        
+        let items = displayedImages.enumerated().filter { selectedImages.contains($0.element.id) }
+        guard items.count == 2 else { return nil }
+        
+        // 🔥 核心修改：真正的视频源必须满足：1. 有视频流链接 且 2. UI 上的 Live 开关处于开启状态
+        let liveItems = items.filter {
+            $0.element.liveVideoUrl != nil && (imageLiveModes[$0.element.id] == true)
+        }
+        
+        // 🔥 真正的封面源：没有视频流的纯静态图，或者 有视频流但被用户强行关闭了 Live 开关的图
+        let nonLiveItems = items.filter {
+            $0.element.liveVideoUrl == nil || (imageLiveModes[$0.element.id] == false)
+        }
+        
+        // 严格配对：必须且只能是一个静态图（或关闭了Live的图），和一个激活状态的动态图
+        if liveItems.count == 1 && nonLiveItems.count == 1 {
+            return (cover: nonLiveItems[0], video: liveItems[0])
+        }
+        return nil
+    }
+    
+    var canSynthesizeLivePhoto: Bool {
+        synthesisPair != nil
+    }
+    
+    var displayedImages: [ImageItem] {
+        switch imageFilterMode {
+        case .all:
+            return imageList
+        case .liveOnly:
+            return imageList.filter { $0.liveVideoUrl != nil && !$0.liveVideoUrl!.isEmpty }
+        case .jpegOnly:
+            return imageList.filter { $0.liveVideoUrl == nil || $0.liveVideoUrl!.isEmpty }
+        }
+    }
     
     var displayedVideos: [VideoStream] {
         var result = videoList.filter { video in
@@ -104,11 +157,19 @@ class ContentViewModel: ObservableObject {
         }
         return result
     }
-
+    
     private func clearSelectionOnFilterChange() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             let displayedIDs = Set(displayedVideos.map { $0.id })
             selectedVideos.formIntersection(displayedIDs)
+        }
+    }
+    
+    // 🔥 补全：修复筛选后选中状态错乱的核心方法
+    private func clearImageSelectionOnFilterChange() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            let displayedIDs = Set(displayedImages.map { $0.id })
+            selectedImages.formIntersection(displayedIDs)
         }
     }
 
@@ -122,10 +183,11 @@ class ContentViewModel: ObservableObject {
     
     func clearLogs() { logs.removeAll(); Task { await checkBackendHealth() } }
 
+    // 🔥 修复：全选基于 displayedImages
     func selectAll() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             if !displayedVideos.isEmpty { selectedVideos = Set(displayedVideos.map { $0.id }) }
-            else if !imageList.isEmpty { selectedImages = Set(imageList.map { $0.id }) }
+            else if !displayedImages.isEmpty { selectedImages = Set(displayedImages.map { $0.id }) }
         }
     }
 
@@ -155,6 +217,7 @@ class ContentViewModel: ObservableObject {
                     self.currentMetadata.removeAll(keepingCapacity: false)
                     self.resolutionTokens.removeAll(keepingCapacity: false)
                     self.encodingTokens.removeAll(keepingCapacity: false)
+                    self.imageFilterMode = .all // 🔥 补全：清空时重置过滤模式
                     self.urlInput = ""
                     self.hasError = false
                 }
@@ -166,7 +229,7 @@ class ContentViewModel: ObservableObject {
             resetFocus()
             Task {
                 await APIService.shared.clearBackendMemory()
-                MediaCacheManager.shared.clearCache() // 清理本地缓存
+                MediaCacheManager.shared.clearCache()
             }
         } else {
             if urlInput.isEmpty { if let clipboard = NSPasteboard.general.string(forType: .string) { urlInput = clipboard } }
@@ -217,7 +280,6 @@ class ContentViewModel: ObservableObject {
                     let detailStr = msgParts.joined(separator: "，")
                     let displayMessage = detailStr.isEmpty ? "解析完成：未发现图片内容" : "获取到 \(detailStr)"
                     
-                    // 初始化每个图片的 Live 模式意图
                     var modes: [UUID: Bool] = [:]
                     for img in images { modes[img.id] = (img.liveVideoUrl != nil) }
                     
@@ -225,6 +287,7 @@ class ContentViewModel: ObservableObject {
                         self.videoList = []
                         self.imageList = images
                         self.imageLiveModes = modes
+                        self.imageFilterMode = .all
                         self.resolutionTokens = []
                         self.encodingTokens = []
                         self.currentMetadata = responseData.metadata ?? [:]
@@ -249,7 +312,6 @@ class ContentViewModel: ObservableObject {
 
     // MARK: - 下载核心逻辑
     
-    // 1. 视频下载
     func downloadSingle(video: VideoStream, isBatchCall: Bool = false) {
         let index = (displayedVideos.firstIndex(where: { $0.id == video.id }) ?? 0) + 1
         if !isBatchCall { batchTotal = 1; batchSuccess = 0; batchError = 0; activeTasksCount = 0 }
@@ -270,9 +332,9 @@ class ContentViewModel: ObservableObject {
         }
     }
     
-    // 2. 图片/Live图 下载保存到相册
     func downloadSingleImage(image: ImageItem, isBatchCall: Bool = false) {
-        let index = (imageList.firstIndex(where: { $0.id == image.id }) ?? 0) + 1
+        // 🔥 修复：索引序号必须从 displayedImages 中取，以保持 UI 和日志一致
+        let index = (displayedImages.firstIndex(where: { $0.id == image.id }) ?? 0) + 1
         if !isBatchCall { batchTotal = 1; batchSuccess = 0; batchError = 0; activeTasksCount = 0 }
         
         activeTasksCount += 1
@@ -280,18 +342,14 @@ class ContentViewModel: ObservableObject {
         let loadingMsg = isBatchCall ? "准备保存中..." : "正在下载并保存第 \(index) 张图..."
         updateStatus("正在处理第 \(index) 张图片...", summary: loadingMsg, type: .loading)
         
-        // 🔥 获取当前解析任务对应的 User-Agent
         let dynamicUA = self.currentMetadata["user_agent"]
         
         Task {
             do {
-                // 传入 dynamicUA
                 let localImageURL = try await MediaCacheManager.shared.downloadMedia(url: image.imageUrl, suffix: ".jpeg", userAgent: dynamicUA)
                 
                 if isLiveTarget, let liveUrl = image.liveVideoUrl {
-                    // 🔥 核心修复：如实以 .mp4 保存下载流，避免 AVFoundation 解析轨道失败
                     let localVideoURL = try await MediaCacheManager.shared.downloadMedia(url: liveUrl, suffix: ".mp4", userAgent: dynamicUA)
-                    
                     try await PhotoExportManager.shared.saveLivePhoto(imageURL: localImageURL, videoURL: localVideoURL)
                 } else {
                     try await PhotoExportManager.shared.saveImage(imageURL: localImageURL)
@@ -324,8 +382,45 @@ class ContentViewModel: ObservableObject {
             }
         }
     }
-
-    // 3. 触发选中下载 (智能判断视频或图片)
+    
+    func synthesizeSelectedLivePhoto() {
+        guard let pair = synthesisPair else { return }
+        
+        let coverIndex = pair.cover.0 + 1
+        let videoIndex = pair.video.0 + 1
+        let coverItem = pair.cover.1
+        let videoItem = pair.video.1
+        
+        batchTotal = 1; batchSuccess = 0; batchError = 0; activeTasksCount = 1
+        
+        updateStatus("正在合成第 \(coverIndex) 张图与第 \(videoIndex) 张 Live...", summary: "准备保存中...", type: .loading)
+        let dynamicUA = self.currentMetadata["user_agent"]
+        
+        Task {
+            do {
+                let localImageURL = try await MediaCacheManager.shared.downloadMedia(url: coverItem.imageUrl, suffix: ".jpeg", userAgent: dynamicUA)
+                guard let liveUrl = videoItem.liveVideoUrl else { throw URLError(.badURL) }
+                let localVideoURL = try await MediaCacheManager.shared.downloadMedia(url: liveUrl, suffix: ".mp4", userAgent: dynamicUA)
+                
+                try await PhotoExportManager.shared.saveLivePhoto(imageURL: localImageURL, videoURL: localVideoURL)
+                
+                await MainActor.run {
+                    self.activeTasksCount -= 1
+                    let msg = "第 \(coverIndex) 张图与第 \(videoIndex) 张 Live 合成保存到相册成功"
+                    self.updateStatus(msg, summary: "保存成功", type: .success)
+                    withAnimation { self.selectedImages.removeAll() }
+                }
+            } catch {
+                await MainActor.run {
+                    self.activeTasksCount -= 1
+                    let msg = "第 \(coverIndex) 张图与第 \(videoIndex) 张 Live 合成失败: \(error.localizedDescription)"
+                    self.updateStatus(msg, summary: "保存失败", type: .error)
+                }
+            }
+        }
+    }
+    
+    // 🔥 修复：基于 displayedImages 进行批量下载选取
     func downloadSelected() {
         if !selectedVideos.isEmpty {
             let targets = videoList.filter { selectedVideos.contains($0.id) }
@@ -335,7 +430,7 @@ class ContentViewModel: ObservableObject {
             for video in targets { downloadSingle(video: video, isBatchCall: true) }
         }
         else if !selectedImages.isEmpty {
-            let targets = imageList.filter { selectedImages.contains($0.id) }
+            let targets = displayedImages.filter { selectedImages.contains($0.id) }
             if targets.count == 1 { downloadSingleImage(image: targets[0], isBatchCall: false); return }
             batchTotal = targets.count; batchSuccess = 0; batchError = 0; activeTasksCount = 0
             updateStatus("开始批量保存 \(batchTotal) 张图片", summary: "批量保存中...", type: .loading)
