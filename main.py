@@ -232,7 +232,9 @@ class SaveTikApp(ctk.CTk):
 
         def do_parse():
             try:
-                data, meta = parse_video_data(url)
+                media_type, data, meta = parse_video_data(url)
+                if media_type != "video":
+                    raise Exception("当前仅支持视频下载，暂不支持图文或Live图")
                 self.after(0, lambda: self.render_list(data, meta))
             except Exception as e:
                 self.after(0, lambda: self.status_bar.configure(text=f"{e}", text_color="#FF5555"))

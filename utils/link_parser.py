@@ -15,7 +15,7 @@ def extract_douyin_url(text: str) -> str:
     # https?:// : 匹配 http 或 https
     # (?:v\.douyin\.com|www\.douyin\.com/video) : 非捕获分组，匹配短链域名或视频详情页路径
     # /\S+ : 匹配斜杠后跟随的非空白字符，直到遇到空格或字符串末尾
-    pattern = r'(https?://(?:v\.douyin\.com|www\.douyin\.com/video)/\S+)'
+    pattern = r'(https?://(?:v\.douyin\.com|www\.douyin\.com/(?:video|note))/\S+)'
     
     match = re.search(pattern, text)
     if match:

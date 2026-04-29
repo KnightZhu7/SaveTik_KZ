@@ -7,7 +7,11 @@ def main():
         return
 
     print("[+] 正在解析视频数据，请稍候...")
-    video_info_list, metadata = parse_video_data(user_input)
+    media_type, video_info_list, metadata = parse_video_data(user_input)
+
+    if media_type != "video":
+        print("[-] 当前仅支持视频解析，暂不支持图文或Live图。")
+        return
 
     if not video_info_list:
         print("[-] 未能解析到视频信息，请检查链接是否有效。")
