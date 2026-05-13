@@ -50,7 +50,7 @@ Supports Douyin image-post links:
 </p>
 
 <p align="center">
-  <a href="https://github.com/KnightZhu7/SaveTik_KZ/releases/tag/V1.5.1">
+  <a href="https://github.com/KnightZhu7/SaveTik_KZ/releases/tag/V1.5.2">
     Download Latest Release
   </a>
 </p>
