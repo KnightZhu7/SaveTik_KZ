@@ -12,7 +12,8 @@ def build_api():
 
     # 2. 构建 PyInstaller 命令
     cmd = [
-        'pyinstaller',
+        sys.executable,      # 🔥 核心修复：获取当前正在执行的 python 的绝对路径 (即 .venv 里的 python)
+        '-m', 'PyInstaller',
         '--clean',           # 清理缓存
         '--noconsole',       # 不要黑窗口
         '--onedir',          # 🔥 关键修改：改成文件夹模式 (启动速度快 10 倍)

@@ -23,6 +23,7 @@ def parse_video_data(input_text):
     
     # 基础无头模式
     co.headless(True) 
+    # co.headless(False) 
     
     # 【核心修改】添加新版无头参数，解决 Mac Dock 栏图标跳动问题
     # Debug 时需要把下面这行注释掉，否则它会覆盖 headless(False) 强制开启无头模式！
@@ -37,12 +38,24 @@ def parse_video_data(input_text):
     # co.set_argument('--no-startup-window')
     
     dp = ChromiumPage(addr_or_opts=co)
-    # ==================== 修改结束 ====================
+    
     try:
-        # 同时监听视频详情和图文/Live图详情的接口
         dp.listen.start(['web/aweme/detail/', 'web/aweme/post/'])
+        
+        dp.set.load_mode('none')
         dp.get(video_link)
-        res = dp.listen.wait(timeout=15)
+        
+        res = dp.listen.wait(timeout=5)
+        
+        if not res:
+            print("[Python 解析流] ➡️ 5秒未截获，触发强制 stop_loading() 释放数据包...")
+            dp.stop_loading()
+            
+            res = dp.listen.wait(timeout=15)
+        else:
+            dp.stop_loading()
+            
+        dp.set.load_mode('normal')
         ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
         if not res:
             raise Exception("该链接不是有效的抖音内容链接，请检查后重试")
@@ -74,6 +87,7 @@ def parse_video_data(input_text):
             aweme_data = aweme_list[0] if aweme_list else None # 通常目标内容在第一个
             
     finally:
+        # pass
         dp.quit()
 
     if not aweme_data:
