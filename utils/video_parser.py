@@ -41,105 +41,124 @@ def parse_video_data(input_text):
     dp = ChromiumPage(addr_or_opts=co)
     
     try:
-        dp.listen.start(['web/aweme/detail/', 'web/aweme/post/'])
-        
-        dp.set.load_mode('none')
-        dp.get(video_link)
-        
-        res = dp.listen.wait(timeout=5)
-        
-        if not res:
-            print("[Python 解析流] ➡️ 5秒未截获，触发强制 stop_loading() 释放数据包...")
-            dp.stop_loading()
-            
-            res = dp.listen.wait(timeout=15)
-        else:
-            dp.stop_loading()
-            
-        dp.set.load_mode('normal')
-        ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
-        if not res:
-            raise Exception("该链接不是有效的抖音内容链接，请检查后重试")
-        
-        # 容错与 Debug：如果返回的是字符串，尝试手动转为 JSON 字典
-        body_data = res.response.body
-        if isinstance(body_data, str):
-            try:
-                body_data = json.loads(body_data)
-                # 再次检查是否为空或异常，某些情况下 DrissionPage 可能返回空 JSON 字符串
-                if not body_data:
-                     raise ValueError("解析为空 JSON 数据")
-            except json.JSONDecodeError:
-                # 如果无法解析为 JSON，说明多半是被风控拦截或抓错了包，打印前 200 个字符进行 Debug
-                print("[!] Debug: 拦截到异常！浏览器将暂停，请立刻查看弹出的 Chrome 窗口是否遇到验证码或报错！")
-                time.sleep(3600)  # 给足时间让你肉眼排查浏览器到底卡在哪了
-                error_snippet = body_data[:200].replace('\n', ' ')
-                print(f"[!] Debug: 获取到的 body 内容 -> {error_snippet}")
-                raise Exception("解析失败：返回的不是有效的 JSON 数据，可能遭遇了反爬验证")
-            
-        current_url = dp.url
-        id_match = re.search(r'/(?:video|note)/(\d+)', current_url)
-        target_aweme_id = id_match.group(1) if id_match else None
-        
-        url_path = res.request.url
+        ua = None
         aweme_data = None
+        
+        # 引入重试机制
+        for attempt in range(2):
+            if attempt > 0:
+                print(f"[*] 首次未获取到有效数据，保留页面并执行 dp.refresh() 进行第 {attempt} 次重试...")
+                time.sleep(1) # 刷新前稍微缓冲一下
+            
+            # 每次尝试前重新启动监听
+            dp.listen.start(['web/aweme/detail/', 'web/aweme/post/'])
+            dp.set.load_mode('none')
+            
+            if attempt == 0:
+                dp.get(video_link)
+            else:
+                dp.refresh()
+            
+            res = dp.listen.wait(timeout=5)
+            
+            if not res:
+                print("[Python 解析流] ➡️ 5秒未截获，触发强制 stop_loading() 释放数据包...")
+                dp.stop_loading()
                 
-        # 根据请求 URL 区分是视频详情还是图文/Live图详情
-        url_path = res.request.url
-        aweme_data = None
-        
-        if 'web/aweme/detail/' in url_path:
-            aweme_data = body_data.get('aweme_detail')
-        elif 'web/aweme/post/' in url_path:
-            aweme_list = body_data.get('aweme_list', [])
-            if aweme_list:
-                first_item = aweme_list[0]
-                # 不遍历，只校验第一个作品。如果目标 ID 存在且对不上，直接让 aweme_data 保持为 None
-                if not target_aweme_id or str(first_item.get('aweme_id')) == target_aweme_id:
-                    aweme_data = first_item
-
-        # 3. 终极兜底方案：抛弃遍历，一步到位直接正则匹配含有目标 ID 的 __pace_f.push 块
-        if not aweme_data and target_aweme_id:
-            print(f"[!] 接口数据未能匹配目标 ID ({target_aweme_id})，正直接匹配 doc 源码...")
-            html_content = dp.html
+                res = dp.listen.wait(timeout=15)
+            else:
+                dp.stop_loading()
+                
+            dp.set.load_mode('normal')
+            ua = dp.user_agent  # 自动获取浏览器当前使用的真实 User-Agent
             
-            pattern = r'self\.__pace_f\.push\(\[\s*\d+,\s*"((?:[^"\\]|\\.)*?\\"(?:awemeId|aweme_id)\\":\\"' + target_aweme_id + r'\\"(?:[^"\\]|\\.)*?)"'
-            match = re.search(pattern, html_content)
+            if not res:
+                if attempt == 0:
+                    continue  # 第一次如果完全没截获到请求，直接进入刷新重试循环
+                else:
+                    raise Exception("解析失败：可能遭遇了反爬验证，请稍后重试")
             
-            if match:
+            # 容错与 Debug：如果返回的是字符串，尝试手动转为 JSON 字典
+            body_data = res.response.body
+            if isinstance(body_data, str):
                 try:
-                    # 1. 提取出这唯一匹配到的长字符串，加引号供 json.loads 原生反转义
-                    raw_str = '"' + match.group(1) + '"'
-                    decoded_str = json.loads(raw_str)
-                    
-                    # 2. 定位到第一个 [ 或 { 去除类似 "7:" 这种前缀
-                    json_start = re.search(r'([\[\{])', decoded_str)
-                    if json_start:
-                        clean_json_str = decoded_str[json_start.start():]
-                        parsed_obj = json.loads(clean_json_str)
+                    body_data = json.loads(body_data)
+                    # 再次检查是否为空或异常
+                    if not body_data:
+                         if attempt == 0:
+                             continue # JSON 为空，走刷新重试流程
+                         else:
+                             raise ValueError("解析为空 JSON 数据")
+                except json.JSONDecodeError:
+                    # 【修复点】：第一次如果遇到非 JSON 格式（比如错抓了 HTML 页面），不报错，直接去重试
+                    if attempt == 0:
+                        print("[*] 解析 JSON 失败（可能抓到了非预期数据包），准备刷新页面重试...")
+                        continue 
+                    else:
+                        print("[!] Debug: 重试后依然拦截到异常！浏览器将暂停，请立刻查看弹出的 Chrome 窗口是否遇到验证码或报错！")
+                        raise Exception("解析失败：可能遭遇了反爬验证，请稍后重试")
+                
+            current_url = dp.url
+            id_match = re.search(r'/(?:video|note)/(\d+)', current_url)
+            target_aweme_id = id_match.group(1) if id_match else None
+            
+            url_path = res.request.url
+            aweme_data = None
+            
+            if 'web/aweme/detail/' in url_path:
+                aweme_data = body_data.get('aweme_detail')
+            elif 'web/aweme/post/' in url_path:
+                aweme_list = body_data.get('aweme_list', [])
+                if aweme_list:
+                    first_item = aweme_list[0]
+                    # 不遍历，只校验第一个作品。如果目标 ID 存在且对不上，直接让 aweme_data 保持为 None
+                    if not target_aweme_id or str(first_item.get('aweme_id')) == target_aweme_id:
+                        aweme_data = first_item
+
+            # 3. 终极兜底方案：抛弃遍历，一步到位直接正则匹配含有目标 ID 的 __pace_f.push 块
+            if not aweme_data and target_aweme_id:
+                print(f"[!] 接口数据未能匹配目标 ID ({target_aweme_id})，正直接匹配 doc 源码...")
+                html_content = dp.html
+                
+                pattern = r'self\.__pace_f\.push\(\[\s*\d+,\s*"((?:[^"\\]|\\.)*?\\"(?:awemeId|aweme_id)\\":\\"' + target_aweme_id + r'\\"(?:[^"\\]|\\.)*?)"'
+                match = re.search(pattern, html_content)
+                
+                if match:
+                    try:
+                        raw_str = '"' + match.group(1) + '"'
+                        decoded_str = json.loads(raw_str)
                         
-                        # 3. 直接抓取
-                        if isinstance(parsed_obj, list):
-                            for item in parsed_obj:
-                                if isinstance(item, dict) and str(item.get('awemeId') or item.get('aweme_id', '')) == target_aweme_id:
-                                    aweme_data = item.get('aweme', {}).get('detail', item)
-                                    break
-                        elif isinstance(parsed_obj, dict):
-                            if str(parsed_obj.get('awemeId') or parsed_obj.get('aweme_id', '')) == target_aweme_id:
-                                aweme_data = parsed_obj.get('aweme', {}).get('detail', parsed_obj)
-                                
-                    if aweme_data:
-                        print(f"[+] 成功通过直接匹配 doc 源码获取到作品 ({target_aweme_id}) 数据！")
-                except Exception as e:
-                    pass
+                        json_start = re.search(r'([\[\{])', decoded_str)
+                        if json_start:
+                            clean_json_str = decoded_str[json_start.start():]
+                            parsed_obj = json.loads(clean_json_str)
+                            
+                            if isinstance(parsed_obj, list):
+                                for item in parsed_obj:
+                                    if isinstance(item, dict) and str(item.get('awemeId') or item.get('aweme_id', '')) == target_aweme_id:
+                                        aweme_data = item.get('aweme', {}).get('detail', item)
+                                        break
+                            elif isinstance(parsed_obj, dict):
+                                if str(parsed_obj.get('awemeId') or parsed_obj.get('aweme_id', '')) == target_aweme_id:
+                                    aweme_data = parsed_obj.get('aweme', {}).get('detail', parsed_obj)
+                                    
+                        if aweme_data:
+                            print(f"[+] 成功通过直接匹配 doc 源码获取到作品 ({target_aweme_id}) 数据！")
+                    except Exception as e:
+                        pass
+            
+            # --- 核心判断：是否成功获取到了数据 ---
+            if aweme_data:
+                # 如果拿到数据了，直接打断循环，往下走，不再重试
+                break
             
     finally:
         # pass
         dp.quit()
 
     if not aweme_data:
-        raise Exception("解析失败：未能获取到有效内容数据")
-
+        raise Exception("解析失败：经过刷新重试后仍未能获取到有效内容数据")
+    
     # 1. 提取元数据用于命名
     author_info = aweme_data.get('author') or aweme_data.get('authorInfo', {})
     nickname = author_info.get('nickname', 'unknown')
