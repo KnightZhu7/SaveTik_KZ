@@ -179,8 +179,10 @@ tab.get('https://www.youtube.com/')
             pass
         ```
 
-
-
+* 置顶图片 / Live图
+    * 服务端渲染（SSR）直出的 JSON 数据，不走单独的 API 请求
+    * 在 `Network` 找到以作品长链接结尾 `<aweme_id>` 为名的 `Doc` 
+    * 在其中定位 `\"awemeId\":\"<aweme_id>\"` 字段，解析出数据，构造为正常的 API 数据格式
 ---
 ## 6. 必要签名参数逆向
 **以主页页面请求 `post/` 为例**
