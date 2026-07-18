@@ -14,6 +14,9 @@ struct FilterPopoverView: View {
     @State private var draggedResToken: FilterToken?
     @State private var draggedEncToken: FilterToken?
     
+    // 左右边缘渐隐宽度，拖拽坐标换算与 mask 保持同一个值
+    private let fadeWidth: CGFloat = 12
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -59,7 +62,7 @@ struct FilterPopoverView: View {
             
             // 编码行
             HStack(spacing: 8) {
-                Text("编    码:").font(.system(size: 13, weight: .medium)).foregroundColor(.secondary).frame(width: 75, alignment: .leading)
+                Text("编　码:").font(.system(size: 13, weight: .medium)).foregroundColor(.secondary).frame(width: 75, alignment: .leading)
                 draggableTokenRow(tokens: $viewModel.encodingTokens, draggedToken: $draggedEncToken, isRes: false)
             }
         }
@@ -89,39 +92,59 @@ struct FilterPopoverView: View {
     private func draggableTokenRow(tokens: Binding<[FilterToken]>, draggedToken: Binding<FilterToken?>, isRes: Bool) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(tokens.wrappedValue) { token in
-                        TokenChip(token: token, isDragging: draggedToken.wrappedValue?.id == token.id) {
-                            toggleToken(token, isRes: isRes)
+                HStack(spacing: 0) {
+                    // 首部留白，宽度精确等于渐隐区域，不受 token 间距干扰
+                    Color.clear.frame(width: fadeWidth)
+                    HStack(spacing: 8) {
+                        ForEach(tokens.wrappedValue) { token in
+                            TokenChip(token: token, isDragging: draggedToken.wrappedValue?.id == token.id) {
+                                toggleToken(token, isRes: isRes)
+                            }
+                            .id(token.id)
+                            .gesture(
+                                token.isOn ? DragGesture(minimumDistance: 4, coordinateSpace: .named("hstack_\(isRes)"))
+                                    .onChanged { value in
+                                        // 拖拽坐标扣除首部留白，保持与原有索引/边界判定逻辑一致
+                                        let adjustedX = value.location.x - fadeWidth
+                                        if draggedToken.wrappedValue?.id != token.id {
+                                            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) { draggedToken.wrappedValue = token }
+                                        }
+                                        reorderTokens(tokens: tokens, dragged: token, xLocation: adjustedX)
+                                        
+                                        if adjustedX < 50 {
+                                            if let idx = tokens.wrappedValue.firstIndex(where: { $0.id == token.id }), idx > 0 {
+                                                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(tokens.wrappedValue[idx - 1].id, anchor: .leading) }
+                                            }
+                                        } else if adjustedX > (380 - 83 - 50) {
+                                            if let idx = tokens.wrappedValue.firstIndex(where: { $0.id == token.id }), idx < tokens.wrappedValue.count - 1 {
+                                                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(tokens.wrappedValue[idx + 1].id, anchor: .trailing) }
+                                            }
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { draggedToken.wrappedValue = nil }
+                                    } : nil
+                            )
                         }
-                        .id(token.id)
-                        .gesture(
-                            token.isOn ? DragGesture(minimumDistance: 4, coordinateSpace: .named("hstack_\(isRes)"))
-                                .onChanged { value in
-                                    if draggedToken.wrappedValue?.id != token.id {
-                                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) { draggedToken.wrappedValue = token }
-                                    }
-                                    reorderTokens(tokens: tokens, dragged: token, xLocation: value.location.x)
-                                    
-                                    if value.location.x < 50 {
-                                        if let idx = tokens.wrappedValue.firstIndex(where: { $0.id == token.id }), idx > 0 {
-                                            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(tokens.wrappedValue[idx - 1].id, anchor: .leading) }
-                                        }
-                                    } else if value.location.x > (380 - 83 - 50) {
-                                        if let idx = tokens.wrappedValue.firstIndex(where: { $0.id == token.id }), idx < tokens.wrappedValue.count - 1 {
-                                            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(tokens.wrappedValue[idx + 1].id, anchor: .trailing) }
-                                        }
-                                    }
-                                }
-                                .onEnded { _ in
-                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { draggedToken.wrappedValue = nil }
-                                } : nil
-                        )
                     }
+                    // 尾部留白，宽度精确等于渐隐区域
+                    Color.clear.frame(width: fadeWidth)
                 }
                 .padding(.vertical, 2)
                 .coordinateSpace(name: "hstack_\(isRes)")
             }
+            // 左右边界模糊过渡，与主列表滚动区域视觉保持一致
+            .mask(
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: fadeWidth)
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: fadeWidth)
+                }
+            )
+            // 整体左移抵消首部占位块，使可见内容与上方"优先级"分段控件左边缘对齐
+            .offset(x: -fadeWidth)
         }
     }
     

@@ -81,18 +81,26 @@ struct ContentView: View {
                         .padding(.trailing, 16)
                     }
                 }
-                // 边缘模糊过渡（保持不变）
+                // 边缘模糊过渡（固定像素控制）
                 .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: .black, location: 0.05),
-                            .init(color: .black, location: 0.95),
-                            .init(color: .clear, location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                    HStack(spacing: 0) {
+                        // 左侧：列表主体内容区域，上下固定像素模糊
+                        VStack(spacing: 0) {
+                            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                                .frame(height: 15)
+                            
+                            // 中间全量显示区域
+                            Color.black
+                            
+                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                                .frame(height: 15)
+                        }
+                        
+                        // 右侧：预留给滚动条的区域（macOS 滚动条大约占 16px）
+                        // 使用纯黑遮罩，确保滚动条本身不会在顶部和底部被透明度渐渐隐藏
+                        Color.black
+                            .frame(width: 16)
+                    }
                 )
                 .padding(.leading, 60)
                 .padding(.trailing, 44)

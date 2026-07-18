@@ -40,6 +40,7 @@ struct ImageGridView: View {
                 }
             }
         }
+        .padding(.top, 5)
         .padding(.vertical, 10)
         .padding(.trailing, 16)
         .frame(maxWidth: .infinity)

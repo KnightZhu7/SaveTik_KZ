@@ -124,6 +124,8 @@ struct SearchBarView: View {
                         ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
                     } else {
                         Image(systemName: viewModel.shouldShowClearButton ? "xmark.circle.fill" : "link.circle.fill")
+                            .animation(nil, value: viewModel.shouldShowClearButton)
+                            .contentTransition(.identity) // 顺便关掉系统隐式 symbol 过渡
                     }
                     Text(viewModel.isFetching ? "解析中" : (viewModel.shouldShowClearButton ? "清除" : "获取"))
                 }

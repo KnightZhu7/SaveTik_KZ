@@ -35,17 +35,17 @@ struct StatusBarView: View {
         .frame(height: 30)
         .background(Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture { showLogPopover.toggle() }
+        .onTapGesture {
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            showLogPopover.toggle()
+        }
         .popover(isPresented: $showLogPopover, arrowEdge: .bottom) {
-                // 只传值类型快照，不把 ViewModel 引用传进 popover
-                LogPopoverView(
-                    logs: viewModel.logs,
-                    onClear: { [weak viewModel] in    // 🌟 核心修复：弱引用捕获
-                        viewModel?.clearLogs()
-                    }
-                )
-            }
-        .animation(.easeInOut(duration: 0.2), value: showLogPopover)
+            LogPopoverView(
+                logs: viewModel.logs,
+                onClear: { viewModel.clearLogs() }
+            )
+        }
+//        .animation(.easeInOut(duration: 0.2), value: showLogPopover)
         .font(.system(size: 12))
         .foregroundColor(.secondary)
         .padding(.bottom, 10)
@@ -100,7 +100,22 @@ struct StatusBarView: View {
                             }
                         }
                     }
+                    .padding(.vertical, 8)
                 }
+                // 上下边界模糊过渡，与主列表滚动区域视觉保持一致
+                .mask(
+                    HStack(spacing: 0) {
+                        VStack(spacing: 0) {
+                            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                                .frame(height: 12)
+                            Color.black
+                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                                .frame(height: 12)
+                        }
+                        Color.black
+                            .frame(width: 16)   // 滚动条区域，始终完全不透明
+                    }
+                )
             }
             .padding(20)
             .frame(width: 380, height: 300)
