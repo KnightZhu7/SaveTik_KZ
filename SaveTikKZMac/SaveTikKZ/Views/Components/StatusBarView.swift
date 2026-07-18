@@ -36,7 +36,6 @@ struct StatusBarView: View {
         .background(Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
-            NSApp.keyWindow?.makeFirstResponder(nil)
             showLogPopover.toggle()
         }
         .popover(isPresented: $showLogPopover, arrowEdge: .bottom) {

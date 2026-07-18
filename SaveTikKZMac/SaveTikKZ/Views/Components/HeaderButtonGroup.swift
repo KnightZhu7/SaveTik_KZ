@@ -58,14 +58,8 @@ struct HeaderButtonGroup: View {
             .disabled(!isImageMode && viewModel.videoList.isEmpty)
             .contentShape(Capsule())
             .onHover { filterHovered = $0 }
-            .overlay {
-                if !isImageMode {
-                    Color.clear
-                        .frame(width: 36 - hoverInset, height: 36 - 2 * hoverInset)
-                        .popover(isPresented: $showFilterPopover, arrowEdge: .top) {
-                            FilterPopoverView(viewModel: viewModel)
-                        }
-                }
+            .popover(isPresented: $showFilterPopover, arrowEdge: .top) {
+                FilterPopoverView(viewModel: viewModel)
             }
             // 🔥 修改：悬停提示同样加入了 canFilterImages 判断
             .help(isImageMode ? ((isOptionPressed && canFilterImages) ? "切换过滤模式 (当前: \(filterModeName))" : (viewModel.preferredGridColumns == 2 ? "最少 2 列" : "最少 3 列")) : (!viewModel.videoList.isEmpty ? "筛选" : "暂无内容可筛选"))

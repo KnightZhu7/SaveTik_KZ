@@ -126,7 +126,13 @@ struct ContentView: View {
 
         }
         .frame(minWidth: 700, minHeight: 550)
-        .onAppear { applyAppearance(selectedAppearance) }
+        .onAppear {
+            applyAppearance(selectedAppearance)
+            // 阻止 macOS 默认将焦点交给首个 NSTextField
+            DispatchQueue.main.async {
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        }
         .onChange(of: selectedAppearance) { _, newValue in applyAppearance(newValue) }
         .task {
             await viewModel.checkBackendHealth()

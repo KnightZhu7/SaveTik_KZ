@@ -49,10 +49,10 @@ class ContentViewModel: ObservableObject {
     }
 
     // --- 底部状态栏控制 ---
-    @Published var statusMessage: String = "准备就绪"
-    @Published var statusIcon: String = "info.circle"
-    @Published var statusColor: Color = .secondary
-    @Published var logs: [LogEntry] = []
+    @Published var statusMessage: String = "启动中..."
+    @Published var statusIcon: String = LogType.loading.icon
+    @Published var statusColor: Color = LogType.loading.color
+    @Published var logs: [LogEntry] = [LogEntry(message: "正在唤醒后端服务...", type: .loading)]
     
     // --- 批量下载追踪 ---
     @Published var activeTasksCount: Int = 0

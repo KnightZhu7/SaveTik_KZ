@@ -8,33 +8,20 @@
 import SwiftUI
 import AppKit
 
-// MARK: - 基础 AppKit 拦截器（仅处理焦点，不干扰行为）
+// MARK: - 基础 AppKit 拦截器
 class NativeBehaviorTextField: NSTextField {
-    private var hasAutoFocusedOnLaunch = false
-    
-    // 仅保留启动自动聚焦，解决打开 App 没光标的问题
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if !hasAutoFocusedOnLaunch, self.window != nil {
-            hasAutoFocusedOnLaunch = true
-            DispatchQueue.main.async { self.window?.makeFirstResponder(self) }
-        }
-    }
+    // 拦截全选请求，避免任何情况下输入框文字被自动全选
     override func selectText(_ sender: Any?) {
-        // 拦截全选请求，什么都不做
+        // 什么都不做，禁用默认全选行为
     }
-    
-    // 🔥 这里不再重写 selectText 或 becomeFirstResponder
-    // 所有的全选、光标定位逻辑将完全遵循 macOS 系统默认行为
 }
 
-// MARK: - 稳压包装器
+// MARK: - NSTextField 包装器
 struct FixedTextField: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String
     var onSubmit: () -> Void
-    @Binding var requestFocus: Bool
-    
+
     func makeNSView(context: Context) -> NSTextField {
         let textField = NativeBehaviorTextField()
         textField.placeholderString = placeholder
@@ -43,7 +30,7 @@ struct FixedTextField: NSViewRepresentable {
         textField.font = .systemFont(ofSize: 13)
         textField.delegate = context.coordinator
         textField.focusRingType = .none
-        
+
         if let cell = textField.cell as? NSTextFieldCell {
             cell.usesSingleLineMode = true
             cell.wraps = false
@@ -51,37 +38,48 @@ struct FixedTextField: NSViewRepresentable {
         }
         return textField
     }
-    
+
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
-        }
-        
-        // 🔥 核心修复：通过强行 makeFirstResponder 解决清除后光标丢失的 Bug
-        if requestFocus {
-            DispatchQueue.main.async {
-                if nsView.window?.firstResponder != nsView.currentEditor() {
-                    nsView.window?.makeFirstResponder(nsView)
+
+            // 如果输入框当前有焦点且新文本非空，取消全选并把光标移到末尾
+            // 避免 first responder 状态下外部设置 stringValue 触发默认全选
+            if !text.isEmpty, let editor = nsView.currentEditor(),
+               nsView.window?.firstResponder === editor {
+                editor.selectedRange = NSRange(location: text.count, length: 0)
+            }
+
+            // 文本被外部清空且有焦点时，resign first responder 避免 placeholder 偏移
+            if text.isEmpty, nsView.window?.firstResponder === nsView.currentEditor() {
+                DispatchQueue.main.async {
+                    nsView.window?.makeFirstResponder(nil)
                 }
-                self.requestFocus = false
             }
         }
     }
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: FixedTextField
         init(_ parent: FixedTextField) { self.parent = parent }
-        
+
         func controlTextDidChange(_ obj: Notification) {
             if let textField = obj.object as? NSTextField {
                 parent.text = textField.stringValue
+
+                // 用户手动删除至空时，resign first responder 避免 placeholder 偏移
+                if textField.stringValue.isEmpty {
+                    DispatchQueue.main.async {
+                        textField.window?.makeFirstResponder(nil)
+                    }
+                }
             }
         }
-        
+
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 parent.onSubmit()
@@ -96,17 +94,15 @@ struct FixedTextField: NSViewRepresentable {
 struct SearchBarView: View {
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var viewModel: ContentViewModel
-    
-    @State private var requestFocus: Bool = false
+
     @State private var textFieldID = UUID()
-    
+
     var body: some View {
         HStack(spacing: 12) {
             FixedTextField(
                 text: $viewModel.urlInput,
                 placeholder: " 粘贴抖音分享链接... ",
-                onSubmit: submitAction,
-                requestFocus: $requestFocus
+                onSubmit: submitAction
             )
             .id(textFieldID)
             .padding(.vertical, 12)
@@ -125,7 +121,7 @@ struct SearchBarView: View {
                     } else {
                         Image(systemName: viewModel.shouldShowClearButton ? "xmark.circle.fill" : "link.circle.fill")
                             .animation(nil, value: viewModel.shouldShowClearButton)
-                            .contentTransition(.identity) // 顺便关掉系统隐式 symbol 过渡
+                            .contentTransition(.identity)
                     }
                     Text(viewModel.isFetching ? "解析中" : (viewModel.shouldShowClearButton ? "清除" : "获取"))
                 }
@@ -140,14 +136,12 @@ struct SearchBarView: View {
         }
         .padding(.horizontal, 60)
     }
-    
+
     private func submitAction() {
         viewModel.handleFetchAction(resetFocus: {
-            // 通过重建 ID 和底层聚焦请求，确保“清除”后光标百分百准时出现
+            // 清除时重建 TextField，解决 placeholder 偏移问题
+            // 不请求焦点，所以清除后光标不会自动回到输入框
             textFieldID = UUID()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                requestFocus = true
-            }
         })
     }
 }
