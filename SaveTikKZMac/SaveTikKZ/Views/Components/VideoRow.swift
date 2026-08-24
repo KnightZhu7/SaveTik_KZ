@@ -49,6 +49,14 @@ struct VideoRow: View {
             RoundedRectangle(cornerRadius: 10).fill(rowBackgroundColor)
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(isSelected ? AppTheme.accentBlue : AppTheme.borderColor(for: colorScheme), lineWidth: isSelected ? 1.5 : 1))
         )
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ItemFramePreferenceKey.self,
+                    value: [video.id: proxy.frame(in: .named("AppWindowSpace"))]
+                )
+            }
+        )
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .animation(.easeInOut(duration: 0.15), value: isHovering)
         .onTapGesture { onSelectToggle() }

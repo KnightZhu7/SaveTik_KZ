@@ -203,6 +203,14 @@ struct ImageGridCell: View {
                 .strokeBorder(isSelected ? AppTheme.accentBlue : Color.clear, lineWidth: isSelected ? 3 : 0)
                 .allowsHitTesting(false)
         )
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ItemFramePreferenceKey.self,
+                    value: [item.id: proxy.frame(in: .named("AppWindowSpace"))]
+                )
+            }
+        )
         // 图片加载任务
         .task(id: item.imageUrl) {
             await loadCoverImage()

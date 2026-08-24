@@ -11,12 +11,31 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("appAppearance") private var selectedAppearance: AppAppearance = .system
     
+    @AppStorage("showSelectionMarquee") private var showSelectionMarquee: Bool = false
+    
     // 全局唯一的数据源 ViewModel
     @StateObject private var viewModel = ContentViewModel()
     
     // 纯 UI 的生命周期交互状态
     @State private var showFilterPopover: Bool = false
     @State private var showLogPopover: Bool = false
+    
+    // 🔥【新增 1】：框选状态与坐标记录
+    @State private var itemFrames: [UUID: CGRect] = [:]
+    @State private var dragStart: CGPoint? = nil
+    @State private var dragCurrent: CGPoint? = nil
+    @State private var initialSelectionBeforeDrag: Set<UUID> = []
+    
+    // 🔥【新增 2】：动态计算框选矩形
+    private var selectionRect: CGRect? {
+        guard let start = dragStart, let current = dragCurrent else { return nil }
+        return CGRect(
+            x: min(start.x, current.x),
+            y: min(start.y, current.y),
+            width: abs(start.x - current.x),
+            height: abs(start.y - current.y)
+        )
+    }
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -126,6 +145,77 @@ struct ContentView: View {
 
         }
         .frame(minWidth: 700, minHeight: 550)
+        // 🔥【新增开始】：统一使用全窗口坐标空间
+        .coordinateSpace(name: "AppWindowSpace")
+        .onPreferenceChange(ItemFramePreferenceKey.self) { frames in
+            self.itemFrames = frames
+        }
+        .overlay(
+            GeometryReader { _ in
+                // 🔥 读取 viewModel.showSelectionMarquee
+                if viewModel.showSelectionMarquee, let rect = selectionRect {
+                    Path { path in
+                        path.addRect(rect)
+                    }
+                    .fill(Color(nsColor: .controlAccentColor).opacity(0.14))
+                    .overlay(
+                        Path { path in
+                            path.addRect(rect)
+                        }
+                        .stroke(Color(nsColor: .controlAccentColor).opacity(0.85), lineWidth: 1)
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+        )
+        .gesture(
+            DragGesture(minimumDistance: 4, coordinateSpace: .named("AppWindowSpace"))
+                .onChanged { value in
+                    guard viewModel.hasResults else { return }
+                    
+                    // 🔥【核心过滤】：如果拖动起点在顶部 48pt 内（窗口拖拽/Header 区域），不触发框选
+                    if dragStart == nil && value.startLocation.y < 50 {
+                        return
+                    }
+                    
+                    let isImageMode = !viewModel.imageList.isEmpty
+                    
+                    if dragStart == nil {
+                        dragStart = value.startLocation
+                        let isCommandOrShift = NSEvent.modifierFlags.contains(.shift) || NSEvent.modifierFlags.contains(.command)
+                        
+                        if isImageMode {
+                            initialSelectionBeforeDrag = isCommandOrShift ? viewModel.selectedImages : []
+                        } else {
+                            initialSelectionBeforeDrag = isCommandOrShift ? viewModel.selectedVideos : []
+                        }
+                    }
+                    
+                    dragCurrent = value.location
+                    
+                    guard let rect = selectionRect else { return }
+                    
+                    var newlyIntersected = Set<UUID>()
+                    for (id, itemFrame) in itemFrames {
+                        if rect.intersects(itemFrame) {
+                            newlyIntersected.insert(id)
+                        }
+                    }
+                    
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        if isImageMode {
+                            viewModel.selectedImages = initialSelectionBeforeDrag.union(newlyIntersected)
+                        } else {
+                            viewModel.selectedVideos = initialSelectionBeforeDrag.union(newlyIntersected)
+                        }
+                    }
+                }
+                .onEnded { _ in
+                    dragStart = nil
+                    dragCurrent = nil
+                    initialSelectionBeforeDrag = []
+                }
+        )
         .onAppear {
             applyAppearance(selectedAppearance)
             // 阻止 macOS 默认将焦点交给首个 NSTextField
@@ -143,6 +233,12 @@ struct ContentView: View {
                     : 3_000_000_000    // 3 秒（启动阶段快速探测）
                 try? await Task.sleep(nanoseconds: interval)
                 await viewModel.checkBackendHealth()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            let latestValue = UserDefaults.standard.bool(forKey: "SaveTik_ShowMarquee")
+            if viewModel.showSelectionMarquee != latestValue {
+                viewModel.showSelectionMarquee = latestValue
             }
         }
     }

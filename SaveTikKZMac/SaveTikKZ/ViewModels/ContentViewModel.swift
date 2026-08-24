@@ -63,6 +63,12 @@ class ContentViewModel: ObservableObject {
     @Published var isBackendOnline: Bool = false
     @Published var startupAttempts: Int = 0
     @Published var hasError: Bool = false
+    
+    @Published var showSelectionMarquee: Bool = UserDefaults.standard.bool(forKey: "SaveTik_ShowMarquee") {
+        didSet {
+            UserDefaults.standard.set(showSelectionMarquee, forKey: "SaveTik_ShowMarquee")
+        }
+    }
 
     var isSelectionMode: Bool { !selectedVideos.isEmpty || !selectedImages.isEmpty }
     

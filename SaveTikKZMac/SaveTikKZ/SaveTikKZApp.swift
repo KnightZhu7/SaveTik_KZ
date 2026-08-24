@@ -12,6 +12,8 @@ struct SaveTik_KZApp: App {
     // 🔥 必须有这一行，绑定 AppDelegate
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
+    @AppStorage("SaveTik_ShowMarquee") private var showSelectionMarquee: Bool = false
+    
     init() {
         // 1. 永久关闭系统级 URLCache 的内存和磁盘配额
         URLCache.shared.memoryCapacity = 0
@@ -23,6 +25,15 @@ struct SaveTik_KZApp: App {
             ContentView()
         }
         .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(after: .toolbar) {
+                Divider()
+                Button(showSelectionMarquee ? "Hide Selection Marquee" : "Show Selection Marquee") {
+                    showSelectionMarquee.toggle()
+                }
+                .keyboardShortcut("M", modifiers: [.command, .shift])
+            }
+        }
     }
 }
 
