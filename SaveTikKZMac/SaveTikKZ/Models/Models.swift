@@ -8,7 +8,7 @@
 import Foundation
 
 // 1. 核心视频流模型 (保持不变)
-struct VideoStream: Codable, Identifiable {
+struct VideoStream: Codable, Identifiable, Equatable {
     let id = UUID()
     
     let nickname: String
@@ -40,7 +40,7 @@ struct VideoStream: Codable, Identifiable {
 }
 
 // 🔥 新增：图片/Live图流模型
-struct ImageItem: Codable, Identifiable {
+struct ImageItem: Codable, Identifiable, Equatable {
     let id = UUID()
     let imageUrl: String
     let width: Int

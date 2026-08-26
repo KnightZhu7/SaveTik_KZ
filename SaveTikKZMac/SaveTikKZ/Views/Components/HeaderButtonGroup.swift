@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import Combine
 
 struct HeaderButtonGroup: View {
     @ObservedObject var viewModel: ContentViewModel
@@ -31,7 +32,7 @@ struct HeaderButtonGroup: View {
             // 按钮 1：筛选 / 网格切换 / Live过滤（左）
             Button {
                 if isImageMode {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                         // 🔥 修改：只有按下 Option 且 允许筛选 时，才触发过滤
                         if isOptionPressed && canFilterImages {
                             viewModel.imageFilterMode = viewModel.imageFilterMode.next

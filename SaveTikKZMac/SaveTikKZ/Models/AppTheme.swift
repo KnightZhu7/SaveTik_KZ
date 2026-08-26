@@ -53,4 +53,57 @@ enum AppAppearance: String, CaseIterable, Identifiable {
         case .dark: return .dark
         }
     }
+    
+    // 🔥 同步直读 macOS 系统的真实外观，零延迟、不受 AppKit 内部外观覆盖状态影响
+    static var systemColorScheme: ColorScheme {
+        if let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle"),
+           style.caseInsensitiveCompare("Dark") == .orderedSame {
+            return .dark
+        }
+        if let match = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) {
+            return match == .darkAqua ? .dark : .light
+        }
+        return .light
+    }
+    
+    static var current: AppAppearance {
+        guard let raw = UserDefaults.standard.string(forKey: "appAppearance") else {
+            return .system
+        }
+        return AppAppearance(rawValue: raw) ?? .system
+    }
+    
+    static func applySavedAppearance() {
+        apply(current)
+    }
+    
+    static func apply(_ appearance: AppAppearance) {
+        let updateBlock = {
+            switch appearance {
+            case .system:
+                NSApp?.appearance = nil
+                for window in NSApp?.windows ?? [] {
+                    window.appearance = nil
+                }
+            case .light:
+                let app = NSAppearance(named: .aqua)
+                NSApp?.appearance = app
+                for window in NSApp?.windows ?? [] {
+                    window.appearance = app
+                }
+            case .dark:
+                let app = NSAppearance(named: .darkAqua)
+                NSApp?.appearance = app
+                for window in NSApp?.windows ?? [] {
+                    window.appearance = app
+                }
+            }
+        }
+        
+        if Thread.isMainThread {
+            updateBlock()
+        } else {
+            DispatchQueue.main.async(execute: updateBlock)
+        }
+    }
 }

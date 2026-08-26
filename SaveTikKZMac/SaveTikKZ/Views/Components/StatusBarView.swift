@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct StatusBarView: View {
     @ObservedObject var viewModel: ContentViewModel

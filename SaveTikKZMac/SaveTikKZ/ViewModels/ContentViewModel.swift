@@ -64,7 +64,7 @@ class ContentViewModel: ObservableObject {
     @Published var startupAttempts: Int = 0
     @Published var hasError: Bool = false
     
-    @Published var showSelectionMarquee: Bool = UserDefaults.standard.bool(forKey: "SaveTik_ShowMarquee") {
+    @Published var showSelectionMarquee: Bool = UserDefaults.standard.object(forKey: "SaveTik_ShowMarquee") == nil ? true : UserDefaults.standard.bool(forKey: "SaveTik_ShowMarquee") {
         didSet {
             UserDefaults.standard.set(showSelectionMarquee, forKey: "SaveTik_ShowMarquee")
         }

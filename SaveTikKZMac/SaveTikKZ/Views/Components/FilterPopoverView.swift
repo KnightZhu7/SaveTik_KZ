@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct FilterPopoverView: View {
     @ObservedObject var viewModel: ContentViewModel

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ItemFramePreferenceKey: PreferenceKey {
     typealias Value = [UUID: CGRect]
@@ -14,5 +15,16 @@ struct ItemFramePreferenceKey: PreferenceKey {
     
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue()) { $1 }
+    }
+}
+
+struct ResultsContainerFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
     }
 }

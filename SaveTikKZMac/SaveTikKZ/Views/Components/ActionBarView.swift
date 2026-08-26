@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import Combine
 
 struct ActionBarView: View {
     @ObservedObject var viewModel: ContentViewModel

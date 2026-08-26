@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import Combine
 
 // MARK: - 基础 AppKit 拦截器
 class NativeBehaviorTextField: NSTextField {
@@ -92,8 +93,13 @@ struct FixedTextField: NSViewRepresentable {
 
 // MARK: - 主搜索视图
 struct SearchBarView: View {
-    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.colorScheme) var systemColorScheme
+    var colorSchemeOverride: ColorScheme? = nil
     @ObservedObject var viewModel: ContentViewModel
+
+    private var colorScheme: ColorScheme {
+        colorSchemeOverride ?? systemColorScheme
+    }
 
     @State private var textFieldID = UUID()
 
@@ -114,27 +120,39 @@ struct SearchBarView: View {
                     .stroke(AppTheme.borderColor(for: colorScheme), lineWidth: 1)
             )
 
+            let isSecondaryStyle = viewModel.shouldShowClearButton || viewModel.isFetching
+            let btnForeground: Color = isSecondaryStyle
+                ? (colorScheme == .dark ? Color.white.opacity(0.92) : Color.black.opacity(0.85))
+                : Color.white
+            let btnBackground: Color = isSecondaryStyle
+                ? (colorScheme == .dark ? Color(red: 0.22, green: 0.22, blue: 0.22) : Color(red: 0.90, green: 0.90, blue: 0.92))
+                : AppTheme.accentBlue
+
             Button(action: submitAction) {
-                HStack {
+                HStack(spacing: 6) {
                     if viewModel.isFetching {
-                        ProgressView().scaleEffect(0.6).frame(width: 12, height: 12)
+                        ProgressView().scaleEffect(0.6).frame(width: 14, height: 14)
                     } else {
-                        Image(systemName: viewModel.shouldShowClearButton ? "xmark.circle.fill" : "link.circle.fill")
-                            .animation(nil, value: viewModel.shouldShowClearButton)
-                            .contentTransition(.identity)
+                        btnForeground
+                            .frame(width: 14, height: 14)
+                            .mask(
+                                Image(systemName: viewModel.shouldShowClearButton ? "xmark.circle.fill" : "link.circle.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                            )
                     }
                     Text(viewModel.isFetching ? "解析中" : (viewModel.shouldShowClearButton ? "清除" : "获取"))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(btnForeground)
                 }
-                .font(.system(size: 13, weight: .bold))
                 .frame(width: 90, height: 42)
-                .background((viewModel.shouldShowClearButton || viewModel.isFetching) ? Color.gray.opacity(0.2) : AppTheme.accentBlue)
-                .foregroundColor((viewModel.shouldShowClearButton || viewModel.isFetching) ? .primary : .white)
+                .background(btnBackground)
                 .cornerRadius(8)
             }
             .buttonStyle(.plain)
             .disabled(viewModel.isFetching)
         }
         .padding(.horizontal, 60)
+        .animation(.easeInOut(duration: 0.15), value: colorScheme)
     }
 
     private func submitAction() {
