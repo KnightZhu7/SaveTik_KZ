@@ -115,6 +115,7 @@ tab.get('https://www.youtube.com/')
         >>>
         >>>`play_addr_265`
         >>>`play_addr_h264`
+        >>> `is_source_HDR`：值为 `1` 时用户上传的视频为HDR视频
 
 
 * 图片

@@ -34,9 +34,23 @@ struct ImageGridCell: View {
     @State private var player: AVPlayer?
     @State private var hasPlayedOnce = false
     
+    // 🔥 真实分辨率与长宽比：优先使用已下载图片的真实物理像素，防止后端元数据错误导致黑边或缩放变形
+    private var realImageSize: CGSize {
+        if let img = coverImage {
+            if let rep = img.representations.first, rep.pixelsWide > 0, rep.pixelsHigh > 0 {
+                return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+            }
+            if img.size.width > 0 && img.size.height > 0 {
+                return img.size
+            }
+        }
+        return CGSize(width: max(1, item.width), height: max(1, item.height))
+    }
+    
     private var aspectRatio: CGFloat {
-        guard item.height > 0 else { return 1.0 }
-        return CGFloat(item.width) / CGFloat(item.height)
+        let size = realImageSize
+        guard size.height > 0 else { return 1.0 }
+        return size.width / size.height
     }
     
     // 固有的属性：判断后端发来的是不是 Live 图
@@ -186,7 +200,7 @@ struct ImageGridCell: View {
                             .allowsHitTesting(false)
                     }
                     
-                    Text("\(item.width)x\(item.height)")
+                    Text("\(Int(realImageSize.width))x\(Int(realImageSize.height))")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(badgeForeground).padding(.horizontal, 6).padding(.vertical, 4)
                         .background(badgeBackground).cornerRadius(6)
