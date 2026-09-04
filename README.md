@@ -55,6 +55,14 @@ Supports Douyin image-post links:
   </a>
 </p>
 
+<p align="center">
+  Fully Native macOS Version
+  &nbsp;—&nbsp;
+  <a href="https://github.com/KnightZhu7/SaveTik_KZ-f2">
+    SaveTik_KZ-f2
+  </a>
+</p>
+
 ---
 
 ## Requirements
