@@ -24,15 +24,38 @@ struct ImageGridCell: View {
     let onDownloadSingle: () -> Void
     
     @State private var isHovered = false
-    
-    // 自定义图片加载状态
     @State private var coverImage: NSImage? = nil
     @State private var isImageLoading = false
     @State private var isImageFailed = false
-    
-    // 播放器状态控制
     @State private var player: AVPlayer?
     @State private var hasPlayedOnce = false
+    
+    init(
+        index: Int,
+        item: ImageItem,
+        isSelected: Bool,
+        isSelectionMode: Bool,
+        colorScheme: ColorScheme,
+        isLiveMode: Binding<Bool>,
+        userAgent: String?,
+        onSelectToggle: @escaping () -> Void,
+        onDownloadSingle: @escaping () -> Void
+    ) {
+        self.index = index
+        self.item = item
+        self.isSelected = isSelected
+        self.isSelectionMode = isSelectionMode
+        self.colorScheme = colorScheme
+        self._isLiveMode = isLiveMode
+        self.userAgent = userAgent
+        self.onSelectToggle = onSelectToggle
+        self.onDownloadSingle = onDownloadSingle
+        
+        // 🔥 直接挂载已预载好的图片，首帧即可直接显示真实比例与内容，无骨架屏闪烁
+        if let cached = ImageCacheManager.shared.image(for: item.imageUrl) {
+            self._coverImage = State(initialValue: cached)
+        }
+    }
     
     // 🔥 真实分辨率与长宽比：优先使用已下载图片的真实物理像素，防止后端元数据错误导致黑边或缩放变形
     private var realImageSize: CGSize {
@@ -287,6 +310,16 @@ struct ImageGridCell: View {
     // MARK: - 自定义图片加载逻辑
     private func loadCoverImage() async {
         guard coverImage == nil else { return }
+        
+        // 1. 优先读取内存缓存
+        if let cached = ImageCacheManager.shared.image(for: item.imageUrl) {
+            await MainActor.run {
+                self.coverImage = cached
+                self.isImageLoading = false
+            }
+            return
+        }
+        
         await MainActor.run { isImageLoading = true; isImageFailed = false }
         
         guard let url = URL(string: item.imageUrl) else {
@@ -303,6 +336,7 @@ struct ImageGridCell: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             if let httpRes = response as? HTTPURLResponse, httpRes.statusCode == 200,
                let img = NSImage(data: data) {
+                ImageCacheManager.shared.storeImage(img, for: item.imageUrl)
                 await MainActor.run {
                     self.coverImage = img
                     self.isImageLoading = false

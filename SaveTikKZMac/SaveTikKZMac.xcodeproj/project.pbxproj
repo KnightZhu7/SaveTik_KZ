@@ -26,6 +26,7 @@
 				Models/Models.swift,
 				SaveTikKZApp.swift,
 				Services/APIService.swift,
+				Services/ImageCacheManager.swift,
 				Services/MediaCacheManager.swift,
 				Services/PhotoExportManager.swift,
 				Services/PythonManager.swift,

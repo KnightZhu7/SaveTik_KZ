@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AppKit
-import Combine
 
 struct ActionBarView: View {
     @ObservedObject var viewModel: ContentViewModel
@@ -38,25 +37,44 @@ struct ActionBarView: View {
                 .keyboardShortcut("a", modifiers: .command)
                 
                 if viewModel.isSelectionMode {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            viewModel.selectedVideos.removeAll()
-                            viewModel.selectedImages.removeAll()
+                    HStack(spacing: 0) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                viewModel.selectedVideos.removeAll()
+                                viewModel.selectedImages.removeAll()
+                            }
+                        }) {
+                            Text("取消").font(.system(size: 13)).foregroundColor(.secondary)
                         }
-                    }) {
-                        Text("取消").font(.system(size: 13)).foregroundColor(.secondary)
+                        .buttonStyle(.plain)
+                        .padding(.leading, 12)
+                        // 🔥 新增：绑定 Esc 键取消选择
+                        .keyboardShortcut(.escape, modifiers: [])
+                        
+                        Text("|").foregroundColor(.secondary.opacity(0.3)).padding(.horizontal, 8)
+                        
+                        let count = viewModel.selectedVideos.count + viewModel.selectedImages.count
+                        HStack(spacing: 0) {
+                            Text("已选 ")
+                            BlurRollingNumberView(value: count, font: .system(size: 13).monospacedDigit(), color: .secondary)
+                            Text(" 项")
+                        }
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: count)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 12)
-                    .transition(.opacity)
-                    // 🔥 新增：绑定 Esc 键取消选择
-                    // （因为这个按钮只有在 isSelectionMode 时才会出现，所以 Esc 键也只在选中状态下生效）
-                    .keyboardShortcut(.escape, modifiers: [])
-                    
-                    Text("|").foregroundColor(.secondary.opacity(0.3)).padding(.horizontal, 8)
-                    
-                    let count = viewModel.selectedVideos.count + viewModel.selectedImages.count
-                    Text("已选 \(count) 项").font(.system(size: 13)).foregroundColor(.secondary).transition(.opacity)
+                    .transition(
+                        .asymmetric(
+                            insertion: .modifier(
+                                active: BlurFadeModifier(opacity: 0, blur: 5),
+                                identity: BlurFadeModifier(opacity: 1, blur: 0)
+                            ),
+                            removal: .modifier(
+                                active: BlurFadeModifier(opacity: 0, blur: 5),
+                                identity: BlurFadeModifier(opacity: 1, blur: 0)
+                            )
+                        )
+                    )
                 }
                 
                 Spacer()
@@ -102,8 +120,12 @@ struct ActionBarView: View {
         .padding(.horizontal, 60)
         .padding(.top, 12)
         .frame(height: 44)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.isSelectionMode)
         // 挂载全局键盘监听器，只要按下/松开 Option，UI 立刻响应
         .onAppear {
+            if let monitor = flagsMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
             flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     isOptionPressed = event.modifierFlags.contains(.option)
@@ -117,7 +139,133 @@ struct ActionBarView: View {
         .onDisappear {
             if let monitor = flagsMonitor {
                 NSEvent.removeMonitor(monitor)
+                flagsMonitor = nil
             }
         }
     }
 }
+
+// MARK: - iOS / 时钟小组件风格逐位模糊滚动数字组件
+struct BlurRollingNumberView: View {
+    let value: Int
+    var font: Font = .system(size: 13).monospacedDigit()
+    var color: Color = .secondary
+    
+    @State private var previousValue: Int = 0
+    
+    private var isIncrementing: Bool {
+        value >= previousValue
+    }
+    
+    struct DigitEntry: Identifiable, Equatable {
+        let place: Int
+        let digit: Int
+        var id: Int { place }
+    }
+    
+    private var digits: [DigitEntry] {
+        if value <= 0 {
+            return [DigitEntry(place: 0, digit: 0)]
+        }
+        var temp = value
+        var result: [DigitEntry] = []
+        var place = 0
+        while temp > 0 {
+            result.append(DigitEntry(place: place, digit: temp % 10))
+            temp /= 10
+            place += 1
+        }
+        return result.reversed()
+    }
+    
+    var body: some View {
+        HStack(spacing: 0.5) {
+            ForEach(digits) { entry in
+                RollingDigitSlot(
+                    digit: entry.digit,
+                    isIncrementing: isIncrementing,
+                    font: font,
+                    color: color
+                )
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.7).combined(with: .opacity),
+                    removal: .scale(scale: 0.7).combined(with: .opacity)
+                ))
+            }
+        }
+        .onChange(of: value) { oldValue, newValue in
+            previousValue = oldValue
+        }
+        .onAppear {
+            previousValue = value
+        }
+    }
+}
+
+private struct RollingDigitSlot: View {
+    let digit: Int
+    let isIncrementing: Bool
+    let font: Font
+    let color: Color
+    
+    var body: some View {
+        ZStack {
+            Text("\(digit)")
+                .font(font)
+                .foregroundColor(color)
+                .id(digit)
+                .transition(
+                    .asymmetric(
+                        insertion: .modifier(
+                            active: BlurOffsetModifier(offset: isIncrementing ? 12 : -12, opacity: 0, blur: 3.5),
+                            identity: BlurOffsetModifier(offset: 0, opacity: 1, blur: 0)
+                        ),
+                        removal: .modifier(
+                            active: BlurOffsetModifier(offset: isIncrementing ? -12 : 12, opacity: 0, blur: 3.5),
+                            identity: BlurOffsetModifier(offset: 0, opacity: 1, blur: 0)
+                        )
+                    )
+                )
+        }
+        .frame(height: 20)
+        .clipped()
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .black, location: 0.18),
+                    .init(color: .black, location: 0.82),
+                    .init(color: .clear, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: digit)
+    }
+}
+
+private struct BlurOffsetModifier: ViewModifier {
+    let offset: CGFloat
+    let opacity: Double
+    let blur: CGFloat
+    
+    func body(content: Content) -> some View {
+        content
+            .offset(y: offset)
+            .opacity(opacity)
+            .blur(radius: blur)
+    }
+}
+
+private struct BlurFadeModifier: ViewModifier {
+    let opacity: Double
+    let blur: CGFloat
+    
+    func body(content: Content) -> some View {
+        content
+            .opacity(opacity)
+            .blur(radius: blur)
+    }
+}
+

@@ -231,6 +231,7 @@ class ContentViewModel: ObservableObject {
             URLCache.shared.removeAllCachedResponses()
             URLCache.shared.memoryCapacity = 0
             URLCache.shared.diskCapacity = 0
+            ImageCacheManager.shared.clearCache()
             updateStatus("准备就绪", type: .info)
             resetFocus()
             Task {
@@ -286,17 +287,28 @@ class ContentViewModel: ObservableObject {
                     let detailStr = msgParts.joined(separator: "，")
                     let displayMessage = detailStr.isEmpty ? "解析完成：未发现图片内容" : "获取到 \(detailStr)"
                     
-                    var modes: [UUID: Bool] = [:]
-                    for img in images { modes[img.id] = (img.liveVideoUrl != nil) }
+                    self.currentMetadata = responseData.metadata ?? [:]
+                    let ua = self.currentMetadata["user_agent"]
                     
-                    withAnimation {
+                    // 🔥 整组并发预载：后台快速并发拉取全部图片并校准物理尺寸，全部就绪后一次性滑入展示
+                    self.updateStatus("正在载入图片 (0/\(images.count))...", type: .loading)
+                    
+                    let correctedImages = await ImageCacheManager.shared.preloadImages(items: images, userAgent: ua) { [weak self] completed, total in
+                        Task { @MainActor in
+                            self?.updateStatus("正在载入图片 (\(completed)/\(total))...", type: .loading)
+                        }
+                    }
+                    
+                    var modes: [UUID: Bool] = [:]
+                    for img in correctedImages { modes[img.id] = (img.liveVideoUrl != nil) }
+                    
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                         self.videoList = []
-                        self.imageList = images
+                        self.imageList = correctedImages
                         self.imageLiveModes = modes
                         self.imageFilterMode = .all
                         self.resolutionTokens = []
                         self.encodingTokens = []
-                        self.currentMetadata = responseData.metadata ?? [:]
                     }
                     self.updateStatus("解析完成：\(displayMessage)", summary: "解析完成: 获取到 \(images.count) 张图片", type: .success)
                 } else {

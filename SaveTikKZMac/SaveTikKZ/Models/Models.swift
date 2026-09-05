@@ -43,8 +43,8 @@ struct VideoStream: Codable, Identifiable, Equatable {
 struct ImageItem: Codable, Identifiable, Equatable {
     let id = UUID()
     let imageUrl: String
-    let width: Int
-    let height: Int
+    var width: Int
+    var height: Int
     let liveVideoUrl: String? // Live图独有，可能为空
     
     enum CodingKeys: String, CodingKey {
